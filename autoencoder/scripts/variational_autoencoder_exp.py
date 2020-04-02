@@ -9,8 +9,8 @@ import numpy as np
 flags = tf.app.flags
 FLAGS = flags.FLAGS
 
-flags.DEFINE_string("training_data_path", " ", "pass the training data path")
-flags.DEFINE_string("testing_data_path", " ", "pass the testing data path")
+flags.DEFINE_string("training_data_path", "/mnt/data/Veeru_backup/cv_exp/data/movie_titles/mini_data/train/", "pass the training data path")
+flags.DEFINE_string("testing_data_path", "/mnt/data/Veeru_backup/cv_exp/data/movie_titles/mini_data/validation/", "pass the testing data path")
 
 """
 # input image dimensions
@@ -33,7 +33,7 @@ else:
 latent_dim = 2
 intermediate_dim = 128
 epsilon_std = 1.0
-epochs = 50
+epochs = 50"""
 
 def inference():
     x = tf.keras.layers.Input(shape=original_img_size)
@@ -124,78 +124,6 @@ def feed_data_train(vae):
 
     vae.save("../model/vae_comp_model_30.h5")
     del vae
-"""
-
-class data_reading(object):
-    def __init__(self):
-        pass
-
-    """ Read image and resize it using opencv python """
-    def get_img(self, path):
-        img = cv.imread(path)
-        resized_img = cv.resize(img, (128, 128))
-
-        return resized_img
-
-    """ Build train data """
-    def load_train_data(self, path):
-        x_train = []
-
-        titles_allowed = 0
-        for title_id in os.listdir(path):
-            title_path = os.path.join(path, title_id)
-            for fname in os.listdir(title_path):
-                file_path = os.path.join(title_path, fname)
-                x = self.get_img(file_path)
-                x_train.append(x)
-
-            titles_allowed += 1
-            if titles_allowed > 5:
-                break
-
-        return x_train
-
-    """ Build test data """
-    def load_test_data(self, path):
-        x_test = []
-
-        titles_allowed = 0
-        for title_id in os.listdir(path):
-            title_path = os.path.join(path, title_id)
-            for fname in os.listdir(title_path):
-                file_path = os.path.join(title_path, fname)
-                x = self.get_img(file_path)
-                x_test.append(x)
-
-            titles_allowed += 1
-            if titles_allowed > 5:
-                break
-
-        return x_test
-
-    """ load train and test data in the form of numpy arrays and normalize them, so that the range is in between (0, 1) """
-    def create_data_numpy_arrays(self, training_data_path, testing_data_path):
-
-        #load training data
-        train_data = self.load_train_data(training_data_path)
-        x_train_data = np.array(train_data)
-        #print(x_train_data.shape)
-
-        #load testing data
-        test_data = self.load_test_data(testing_data_path)
-        x_test_data = np.array(test_data)
-        #print(x_test_data.shape)
-
-        #reshape and normalize
-        img_size = x_train_data.shape[1]
-        x_train = np.reshape(x_train_data, [-1, img_size, img_size, 3])
-        x_test = np.reshape(x_test_data, [-1, img_size, img_size, 3])
-        x_train = x_train_data.astype('float32') / 255
-        x_test = x_test_data.astype('float32') / 255
-        #print(x_train.shape, x_test.shape)
-
-        return img_size, x_train, x_test
-
 
 class inference(object):
     def __init__(self, img_size):
@@ -220,7 +148,7 @@ class inference(object):
 
         return z_mean + tf.keras.backend.exp(0.5*z_log_var) * epsilon
 
-    """ VAE model = encoder + decoder """
+    """ build encoder architecture """
     def encoder_model(self):
         inputs = tf.keras.layers.Input(shape=self.input_shape, name='encoder_input')
         x = inputs
@@ -238,17 +166,15 @@ class inference(object):
         encoder = tf.keras.models.Model(inputs, [z_mean, z_log_var, z], name='encoder')
 
         #encoder.summary()
-        #plot_model(encoder, to_file='../model/vae_mnist/vae_cnn_encoder_md.png', show_shapes=True)
+        tf.keras.utils.plot_model(encoder, to_file='../model/vae_mnist/vae_cnn_encoder_md.png', show_shapes=True)
 
         return encoder, shape, inputs, z_mean, z_log_var
 
+    """ build decoder architecture """
     def decoder_model(self, shape, encoder, inputs):
-        #build decoder model
         latent_inputs = tf.keras.layers.Input(shape=(self.latent_dim, ), name='z_sampling')
-        #print(type(latent_inputs), latent_inputs.shape)
         x = tf.keras.layers.Dense(shape[1]*shape[2]*shape[3], activation='relu')(latent_inputs)
         x = tf.keras.layers.Reshape((shape[1], shape[2], shape[3]))(x)
-        #print(shape[1], shape[2], shape[3])
 
         for i in range(2):
             x = tf.keras.layers.Conv2DTranspose(filters=self.filters, kernel_size=self.kernel_size, activation='relu', strides=2, padding='same')(x)
@@ -259,7 +185,7 @@ class inference(object):
         decoder = tf.keras.models.Model(latent_inputs, outputs, name='decoder')
 
         #decoder.summary()
-        #plot_model(decoder, to_file='../model/vae_mnist/vae_cnn_decoder_md.png', show_shapes=True)
+        tf.keras.utils.plot_model(decoder, to_file='../model/vae_mnist/vae_cnn_decoder_md.png', show_shapes=True)
 
         outputs = decoder(encoder(inputs)[2])
         vae = tf.keras.models.Model(inputs, outputs, name='vae')
@@ -287,9 +213,11 @@ class inference(object):
         vae.compile(optimizer='rmsprop', metrics=['acc'])
 
         #vae.summary()
-        #plot_model(vae, to_file='../model/vae_mnist/vae_cnn_md.png', show_shapes=True)
+        tf.keras.utils.plot_model(vae, to_file='../model/vae_mnist/vae_cnn_md.png', show_shapes=True)
 
         vae.fit(x_train, epochs=self.epochs, batch_size=self.batch_size, validation_data=(x_test, None))
+
+        vae.save("path") #todo
 
     def train_generator(self, encoder, decoder, inputs, outputs, z_mean, z_log_var, vae):
         models = (encoder, decoder)
@@ -320,27 +248,29 @@ class inference(object):
         valid_generator = test_datagen.flow_from_directory(FLAGS.testing_data_path, color_mode='rgb', class_mode='input', batch_size=self.batch_size)
 
         #vae.summary()
-        #plot_model(vae, to_file='../model/vae_mnist/vae_cnn_mdn.png', show_shapes=True)
+        tf.keras.utils.plot_model(vae, to_file='../model/vae_mnist/vae_cnn_mdn.png', show_shapes=True)
 
         train_samples = train_generator.n//self.batch_size
         valid_samples = valid_generator.n//self.batch_size
 
         vae.fit_generator(train_generator, steps_per_epoch= train_samples, epochs=self.epochs, validation_data=valid_generator, validation_steps = valid_samples, workers=16, use_multiprocessing=True)
 
+        vae.save("path")#todo
+
 def main():
     is_fit = False
+
     img_size = 256
-    if is_fit:
+    if is_fit: #experiment with small dataset which can fit in available memory
         data = data_reading();
         img_size, x_train, x_test = data.create_data_numpy_arrays(FLAGS.training_data_path, FLAGS.testing_data_path)
-        print(tf.keras.backend.image_data_format())
 
     arch = inference(img_size)
     encoder, shape, inputs, z_mean, z_log_var = arch.encoder_model()
     decoder, vae, outputs = arch.decoder_model(shape, encoder, inputs)
 
     if is_fit:
-        arch.loss_train(encoder, decoder, vae, inputs, outputs, z_mean, z_log_var, x_train, x_test)
+        arch.train(encoder, decoder, vae, inputs, outputs, z_mean, z_log_var, x_train, x_test)
 
     arch.train_generator(encoder, decoder, inputs, outputs, z_mean, z_log_var, vae)
 

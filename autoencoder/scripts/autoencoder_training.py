@@ -102,6 +102,73 @@ class dataGenerator:
         for batch in generator:
             yield(batch, batch)
 
+    """
+    Demo code of using ImageDataGenerator().fit method
+    limitations: need to store all the data in ram which is not feasible in larger data cases
+    """
+    def feed_data_train_fit_transform(ae):
+
+        train_datagen_samples = ImageDataGenerator()
+        valid_datagen_samples = ImageDataGenerator()
+
+        train_generator_samples = train_datagen_samples.flow_from_directory(train_data_dir, target_size=(img_width, img_height),
+                                                                        batch_size=nb_batch_size, class_mode="input", shuffle=True)
+        valid_generator_samples = valid_datagen_samples.flow_from_directory(valid_data_dir, target_size=(img_width, img_height),
+                                                                        batch_size=nb_batch_size, class_mode="input", shuffle=True)
+
+        # train samples
+        print("##### training samples #####")
+        fit_train_samples = np.array([])
+        fit_train_samples.resize((0, img_width, img_height, 3))
+        for i in range(int(train_generator_samples.samples/nb_batch_size)):
+            imgs, labels = next(train_generator_samples)
+            idx = np.random.choice(imgs.shape[0], nb_batch_size, replace=False)
+            np.vstack((fit_train_samples, imgs))
+
+        if train_generator_samples.samples % nb_batch_size != 0:
+            imgs, labels = next(train_generator_samples)
+            idx = np.random.choice(imgs.shape[0], nb_batch_size, replace=False)
+            np.vstack((fit_train_samples, imgs))
+
+        #validation samples
+        print("##### validation samples #####")
+        fit_valid_samples = np.array([])
+        fit_valid_samples.resize((0, img_width, img_height, 3))
+        print(valid_generator_samples.samples)
+        for i in range(int(valid_generator_samples.samples/nb_batch_size)):
+            imgs, labels = next(valid_generator_samples)
+            idx = np.random.choice(imgs.shape[0], nb_batch_size, replace=False)
+            np.vstack((fit_valid_samples, imgs[idx]))
+
+        if valid_generator_samples.samples % nb_batch_size != 0:
+            imgs, labels = next(valid_generator_samples)
+            idx = np.random.choice(imgs.shape[0], imgs.shape[0], replace=False)
+            print("index", imgs[idx].shape)
+            np.vstack((fit_valid_samples, imgs[idx]))
+
+        shift = 0.2
+        train_datagen = ImageDataGenerator(rescale=1./255, featurewise_center=True, featurewise_std_normalization=True, zca_whitening=False,
+                                       rotation_range=90, width_shift_range=shift, height_shift_range=shift, horizontal_flip=True, vertical_flip=True)
+        valid_datagen = ImageDataGenerator(rescale=1./255, featurewise_center=True, featurewise_std_normalization=False, zca_whitening=False,
+                                       rotation_range=90,width_shift_range=shift, height_shift_range=shift, horizontal_flip=True, vertical_flip=True)
+
+        train_datagen.fit(fit_train_samples)
+        #print(type(fit_valid_samples))
+        #display_images(fit_valid_samples)
+        valid_datagen.fit(fit_valid_samples)
+
+        train_generator = train_datagen.flow_from_directory(train_data_dir, target_size=(img_width, img_height), batch_size=nb_batch_size, class_mode="input",
+                                                        shuffle=True)
+        valid_generator = valid_datagen.flow_from_directory(valid_data_dir, target_size=(img_width, img_height), batch_size=nb_batch_size, class_mode="input",
+                                                        shuffle=True)
+
+        #ae.fit_generator(train_generator, steps_per_epoch=math.floor(nb_train_samples/nb_batch_size), epochs=nb_epoch,
+                     #validation_data=valid_generator, validation_steps=math.floor(nb_valid_samples/nb_batch_size), verbose = 1,
+                    #callbacks=[history_cnn, checkpoint_cnn])
+        ae.fit_generator(valid_generator, steps_per_epoch=math.floor(nb_valid_samples/nb_batch_size), epochs=nb_epoch)
+
+        ae.save("../model/ae_movie_data.h5")
+        del ae
 
     def feed_data_train_idg(self, ae):
         #add the data augmentation
