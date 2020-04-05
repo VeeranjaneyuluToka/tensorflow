@@ -8,7 +8,8 @@ import os
 import cv2 as cv
 import math
 import numpy as np
-from datetime import date
+
+from common import *
 
 flags = tf.app.flags
 FLAGS = flags.FLAGS
@@ -16,9 +17,6 @@ FLAGS = flags.FLAGS
 flags.DEFINE_string('train_data_dir', '/mnt/data/Veeru_backup/cv_exp/data/movie_titles/mini_data/train/', 'training data directory path')
 flags.DEFINE_string('valid_data_dir', '/mnt/data/Veeru_backup/cv_exp/data/movie_titles/mini_data/validation/', 'testing data directory path')
 flags.DEFINE_string('output_dir', '../../outputs/', 'all outputs model, logs etc.. path')
-
-today = date.today()
-d4 = today.strftime("%b-%d-%y")
 
 """
 class derived from keras.utils.Sequence class, so that the data will be processed sequentially
@@ -186,26 +184,7 @@ class dataGenerator:
         train_samples = int(train_generator.n//self.nb_batch_size)
         valid_samples = int(valid_generator.n//self.nb_batch_size)
 
-        model_path = os.path.join(FLAGS.output_dir, 'model')
-        if not os.path.exists(model_path):
-            os.makedirs(model_path)
-        curr_model_path = os.path.join(model_path, d4)
-        if not os.path.exists(curr_model_path):
-            os.makedirs(curr_model_path)
-        modelckpt_path = os.path.join(curr_model_path, 'aecnn.h5')
-
-        logs_path = os.path.join(FLAGS.output_dir, 'logs')
-        if not os.path.exists(logs_path):
-            os.makedirs(logs_path)
-        curr_logs_path = os.path.join(logs_path, d4)
-        if not os.path.exists(curr_logs_path):
-            os.makedirs(curr_logs_path)
-        comp_logs_path = os.path.join(curr_logs_path, 'tb')
-
-        checkpoint = tf.keras.callbacks.ModelCheckpoint(filepath=modelckpt_path, save_best_only=True, monitor='val_loss', mode='min')
-        tensorboard = tf.keras.callbacks.TensorBoard(log_dir=comp_logs_path, histogram_freq=0, write_graph=False)
-        es = tf.keras.callbacks.EarlyStopping(monitor='val_loss', min_delta=0, patience=10, mode='auto', verbose=1)
-        callbacks = [checkpoint, tensorboard, es]
+        callbacks, curr_model_path = model_call_backs(FLAGS.output_dir, 'aecnn.h5')
 
         data = train_generator.next()
         #kmri.visualize_model(ae, data[0])
@@ -225,28 +204,10 @@ class dataGenerator:
         nb_train_steps = int(train_datagen.n // self.nb_batch_size)
         nb_valid_steps = int(valid_datagen.n // self.nb_batch_size)
 
-        model_path = os.path.join(FLAGS.output_dir, 'model')
-        if not os.path.exists(model_path):
-            os.makedirs(model_path)
-        curr_model_path = os.path.join(model_path, d4)
-        if not os.path.exists(curr_model_path):
-            os.makedirs(curr_model_path)
-        modelckpt_path = os.path.join(curr_model_path, 'aecnn.h5')
-
-        logs_path = os.path.join(FLAGS.output_dir, 'logs')
-        if not os.path.exists(logs_path):
-            os.makedirs(logs_path)
-        curr_logs_path = os.path.join(logs_path, d4)
-        if not os.path.exists(curr_logs_path):
-            os.makedirs(curr_logs_path)
-        comp_logs_path = os.path.join(curr_logs_path, 'tb')
-
-        checkpoint = ModelCheckpoint(filepath=modelckpt_path, save_best_only=True, monitor='val_loss', mode='min')
-        tensorboard = TensorBoard(log_dir=comp_logs_path, histogram_freq=0, write_graph=False)
-        es = EarlyStopping(monitor='val_loss', min_delta=0, patience=10, mode='auto', verbose=1)
+        callbacks, curr_model_path = model_call_backs(FLAGS.output_dir, 'aecnn.h5')
 
         ae.fit_generator(generator=train_datagen, steps_per_epoch=nb_train_steps, epochs=self.nb_epochs, validation_data=valid_datagen, validation_steps = nb_valid_steps,
-		callbacks=[checkpoint, tensorboard, es], workers=32, use_multiprocessing=True)
+		callbacks=callbacks, workers=32, use_multiprocessing=True)
 
         final_model = os.path.join(curr_model_path, 'aeCNN_final.h5')
         ae.save(final_model)
@@ -267,7 +228,11 @@ def train(train_data_dir, valid_data_dir, train_cdg):
     #print(ae_model.summary())
 
     """ Convolutional autoencoder architecture """
-    ae_model = ConvAutoEncoder(input_shape).autoencoder
+    is_deeper = False
+    if is_deeper:
+        ae_model = ConvAutoEncoder(input_shape).autoencoder
+    else:
+        ae_model = ConvAutoEncoder(input_shape).ae_4layers()
     print(ae_model.summary())
 
     if train_cdg == True: # use custom generator

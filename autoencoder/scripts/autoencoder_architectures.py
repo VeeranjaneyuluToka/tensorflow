@@ -3,18 +3,16 @@ import setGPU
 import tensorflow as tf
 
 class ConvAutoEncoder:
-    def __init__(self, input_shape):
+    def __init__(self, input_shape, is_deeper=False):
         self.input_shape = input_shape
         self.input_img = tf.keras.layers.Input(shape=self.input_shape, name='encoder_input')
-        self.encoder = self.encoder(self.input_img)
-        self.decoder = self.decoder(self.encoder)
-        self.autoencoder = tf.keras.models.Model(self.input_img, self.decoder)
-        #self.autoencoder.compile(loss='mean_squared_error', optimizer=optimizers.RMSprop())
+        if is_deeper:
+            self.encoder = self.encoder(self.input_img)
+            self.decoder = self.decoder(self.encoder)
+            self.autoencoder = tf.keras.models.Model(self.input_img, self.decoder)
 
     """ encoder """
     def encoder(self, input_img):
-        filters = [32, 32, 64, 64, 128, 128, 256, 256, 512, 512, 512, 512]
-
         conv1 = tf.keras.layers.Conv2D(32, (3, 3), activation='relu', padding='same')(input_img) #224 x 224 x 32
         conv1 = tf.keras.layers.BatchNormalization()(conv1)
         conv1 = tf.keras.layers.Conv2D(32, (3, 3), activation='relu', padding='same')(conv1)
@@ -104,17 +102,15 @@ class ConvAutoEncoder:
     - experiment with different loss functions
     """
     def ae_4layers(self):
-        input_img = tf.keras.layers.Input(shape=(self.img_width, self.img_height, self.img_channels))
 
         """ Encoder layers """
-        x = tf.keras.layers.Conv2D(32, (3, 3), activation='relu', padding='same')(input_img)
+        x = tf.keras.layers.Conv2D(32, (3, 3), activation='relu', padding='same')(self.input_img)
         x = tf.keras.layers.MaxPooling2D((2, 2), padding='same')(x)
 
         x = tf.keras.layers.Conv2D(16, (3, 3), activation='relu', padding='same')(x)
         x = tf.keras.layers.MaxPooling2D((2, 2), padding='same')(x)
 
         x = tf.keras.layers.Conv2D(16, (3, 3), activation='relu', padding='same')(x)
-        #encoded = MaxPooling2D((2, 2), padding='same', name='encoder')(x)
         x = tf.keras.layers.MaxPooling2D((2, 2), padding='same')(x)
 
         x = tf.keras.layers.Conv2D(8, (3, 3), activation='relu', padding='same')(x)
@@ -134,7 +130,7 @@ class ConvAutoEncoder:
         x = tf.keras.layers.UpSampling2D((2, 2))(x)
         decoded = tf.keras.layers.Conv2D(3, (3, 3), activation='sigmoid', padding='same')(x)
 
-        ae = tf.keras.models.Model(input_img, decoded)
+        ae = tf.keras.models.Model(self.input_img, decoded)
 
         return ae
 

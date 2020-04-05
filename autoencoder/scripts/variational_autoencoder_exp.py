@@ -6,126 +6,93 @@ import os
 import cv2 as cv
 import numpy as np
 
+from common import *
+
 flags = tf.app.flags
 FLAGS = flags.FLAGS
 
 flags.DEFINE_string("training_data_path", "/mnt/data/Veeru_backup/cv_exp/data/movie_titles/mini_data/train/", "pass the training data path")
 flags.DEFINE_string("testing_data_path", "/mnt/data/Veeru_backup/cv_exp/data/movie_titles/mini_data/validation/", "pass the testing data path")
+flags.DEFINE_string("output_path", "/mnt/data/Veeru_backup/cv_exp/src/AE/outputs/", "outputs path")
 
-"""
-# input image dimensions
-img_rows, img_cols, img_chns = 256, 256, 3
+class inference_deep_vae(object):
+    def __init__(self):
+        self.img_rows = 256
+        self.img_cols = 256
+        self.img_chns = 3
 
-# number of convolutional filters to use
-filters = 64
+        self.filters = 64
+        self.num_conv = 3
+        self.batch_size = 64
 
-# convolution kernel size
-num_conv = 3
+        if tf.keras.backend.image_data_format() == 'channels_first':
+            original_img_size = (img_chns, img_rows, img_cols)
+        else:
+            original_img_size = (img_rows, img_cols, img_chns)
 
-#batch size
-batch_size = 64
+        self.latent_dim = 2
+        self.intermediate_dim = 128
+        self.epsilon_std = 1.0
+        self.epochs = 50
 
-if tf.keras.backend.image_data_format() == 'channels_first':
-    original_img_size = (img_chns, img_rows, img_cols)
-else:
-    original_img_size = (img_rows, img_cols, img_chns)
+    def inference(self):
 
-latent_dim = 2
-intermediate_dim = 128
-epsilon_std = 1.0
-epochs = 50"""
+        x = tf.keras.layers.Input(shape=self.original_img_size)
 
-def inference():
-    x = tf.keras.layers.Input(shape=original_img_size)
+        conv_1 = tf.keras.layers.Conv2D(self.img_chns, kernel_size=(2, 2), padding='same', activation='relu')(x)
+        conv_2 = tf.keras.layers.Conv2D(self.filters, kernel_size=(2, 2), padding='same', activation='relu', strides=(2, 2))(conv_1)
+        conv_3 = tf.keras.layers.Conv2D(self.filters, kernel_size=num_conv, padding='same', activation='relu', strides=1)(conv_2)
+        conv_4 = tf.keras.layers.Conv2D(self.filters, kernel_size=num_conv, padding='same', activation='relu', strides=1)(conv_3)
+        flat = tf.keras.layers.Flatten()(conv_4)
+        hidden = tf.keras.layers.Dense(self.intermediate_dim, activation='relu')(flat)
 
-    conv_1 = tf.keras.layers.Conv2D(img_chns, kernel_size=(2, 2), padding='same', activation='relu')(x)
-    conv_2 = tf.keras.layers.Conv2D(filters, kernel_size=(2, 2), padding='same', activation='relu', strides=(2, 2))(conv_1)
-    conv_3 = tf.keras.layers.Conv2D(filters, kernel_size=num_conv, padding='same', activation='relu', strides=1)(conv_2)
-    conv_4 = tf.keras.layers.Conv2D(filters, kernel_size=num_conv, padding='same', activation='relu', strides=1)(conv_3)
-    flat = tf.keras.layers.Flatten()(conv_4)
-    hidden = tf.keras.layers.Dense(intermediate_dim, activation='relu')(flat)
+        z_mean = tf.keras.layers.Dense(self.latent_dim)(hidden)
+        z_log_var = tf.keras.layers.Dense(self.latent_dim)(hidden)
 
-    z_mean = tf.keras.layers.Dense(latent_dim)(hidden)
-    z_log_var = tf.keras.layers.Dense(latent_dim)(hidden)
+        def sampling(args):
+            z_mean, z_log_var = args
+            epsilon = tf.keras.backend.random_normal(shape=(tf.keras.backend.shape(z_mean)[0], self.latent_dim), mean=0., stddev=self.epsilon_std)
+            return z_mean + tf.keras.backend.exp(z_log_var) * epsilon
 
-    def sampling(args):
-        z_mean, z_log_var = args
-        epsilon = tf.keras.backend.random_normal(shape=(K.shape(z_mean)[0], latent_dim), mean=0., stddev=epsilon_std)
-        return z_mean + tf.keras.backend.exp(z_log_var) * epsilon
+        z = tf.keras.layers.Lambda(sampling, output_shape=(self.latent_dim,))([z_mean, z_log_var])
 
-    z = tf.keras.layers.Lambda(sampling, output_shape=(latent_dim,))([z_mean, z_log_var])
+        decoder_hid = tf.keras.layers.Dense(self.intermediate_dim, activation='relu')
+        decoder_upsample = tf.keras.layers.Dense(self.filters * 128 * 128, activation='relu')
 
-    decoder_hid = tf.keras.layers.Dense(intermediate_dim, activation='relu')
-    decoder_upsample = tf.keras.layers.Dense(filters * 128 * 128, activation='relu')
+        if tf.keras.backend.image_data_format() == 'channels_first':
+            output_shape = (self.batch_size, self.filters, 128, 128)
+        else:
+            output_shape = (self.batch_size, 128, 128, self.filters)
 
-    if tf.keras.backend.image_data_format() == 'channels_first':
-        output_shape = (batch_size, filters, 128, 128)
-    else:
-        output_shape = (batch_size, 128, 128, filters)
+        decoder_reshape = tf.keras.layers.Reshape(output_shape[1:])
+        decoder_deconv_1 = tf.keras.layers.Conv2DTranspose(self.filters, kernel_size=self.num_conv, padding='same', strides=1, activation='relu')
+        decoder_deconv_2 = tf.keras.layers.Conv2DTranspose(self.filters, kernel_size=self.num_conv, padding='same', strides=1, activation='relu')
 
-    decoder_reshape = tf.keras.layers.Reshape(output_shape[1:])
-    decoder_deconv_1 = tf.keras.layers.Conv2DTranspose(filters, kernel_size=num_conv, padding='same', strides=1, activation='relu')
-    decoder_deconv_2 = tf.keras.layers.Conv2DTranspose(filters, kernel_size=num_conv, padding='same', strides=1, activation='relu')
+        if tf.keras.backend.image_data_format() == 'channels_first':
+            output_shape = (self.batch_size, self.filters, 256, 256)
+        else:
+            output_shape = (self.batch_size, 256, 256, self.filters)
 
-    if tf.keras.backend.image_data_format() == 'channels_first':
-        output_shape = (batch_size, filters, 256, 256)
-    else:
-        output_shape = (batch_size, 256, 256, filters)
+        decoder_deconv_3_upsamp = tf.keras.layers.Conv2DTranspose(self.filters, kernel_size=(3, 3), strides=(2, 2), padding='valid', activation='relu')
+        decoder_mean_squash = tf.keras.layers.Conv2D(self.img_chns, kernel_size=2, padding='valid', activation='sigmoid')
 
-    decoder_deconv_3_upsamp = tf.keras.layers.Conv2DTranspose(filters, kernel_size=(3, 3), strides=(2, 2), padding='valid', activation='relu')
-    decoder_mean_squash = tf.keras.layers.Conv2D(img_chns, kernel_size=2, padding='valid', activation='sigmoid')
+        hid_decoded = decoder_hid(z)
+        up_decoded = decoder_upsample(hid_decoded)
+        reshape_decoded = decoder_reshape(up_decoded)
+        deconv_1_decoded = decoder_deconv_1(reshape_decoded)
+        deconv_2_decoded = decoder_deconv_2(deconv_1_decoded)
+        x_decoded_relu = decoder_deconv_3_upsamp(deconv_2_decoded)
+        x_decoded_mean_squash = decoder_mean_squash(x_decoded_relu)
 
-    hid_decoded = decoder_hid(z)
-    up_decoded = decoder_upsample(hid_decoded)
-    reshape_decoded = decoder_reshape(up_decoded)
-    deconv_1_decoded = decoder_deconv_1(reshape_decoded)
-    deconv_2_decoded = decoder_deconv_2(deconv_1_decoded)
-    x_decoded_relu = decoder_deconv_3_upsamp(deconv_2_decoded)
-    x_decoded_mean_squash = decoder_mean_squash(x_decoded_relu)
-   # instantiate VAE model
-    vae = tf.keras.models.Model(x, x_decoded_mean_squash)
-    #plot_model(vae, to_file='../model/vae_md/vae_model_md_040219.png', show_shapes=True)
+        #instantiate VAE model
+        vae = tf.keras.models.Model(x, x_decoded_mean_squash)
+        #tf.keras.utils.plot_model(vae, to_file='../model/vae_md/vae_model_md_040219.png', show_shapes=True)
 
-    return vae, z_log_var, z_mean
+        return vae, z_log_var, z_mean
 
-vae, z_log_var, z_mean = inference()
+#vae, z_log_var, z_mean = inference()
 
-# Compute VAE loss
-def loss_fun(x, x_decodec_mean_squash):
-    xent_loss = img_rows * img_cols * metrics.binary_crossentropy(tf.keras.backend.flatten(y_true), tf.keras.backend.flatten(y_pred))
-    kl_loss = - 0.5 * tf.keras.backend.sum(1 + z_log_var - tf.keras.backend.square(z_mean) - tf.keras.backend.exp(z_log_var), axis=-1)
-    vae_loss = tf.keras.backend.mean(xent_loss + kl_loss)
-    #vae.add_loss(vae_loss)
-    return vae_loss
-
-def feed_data_train(vae):
-    vae.compile(optimizer='rmsprop', loss=loss_fun)
-    vae.summary()
-
-    train_datagen = tf.keras.preprocessing.image.ImageDataGenerator(data_format='channels_first', rescale=1./255)
-    test_datagen = tf.keras.preprocessing.image.ImageDataGenerator(data_format='channels_first', rescale=1./255)
-
-    train_generator = train_datagen.flow_from_directory('../data/movie_data/bbs_data_split/train_500/', color_mode='rgb',
-                class_mode='input', batch_size=batch_size)
-    validation_generator = test_datagen.flow_from_directory('../data/movie_data/bbs_data_split/test_200/', color_mode='rgb',
-                class_mode='input', batch_size=batch_size)
-
-    #x_train = x_train.astype('float32') / 255.
-    #x_train = x_train.reshape((x_train.shape[0],) + original_img_size)
-    #x_test = x_test.astype('float32') / 255.
-    #x_test = x_test.reshape((x_test.shape[0],) + original_img_size)
-    #print('x_train.shape:', x_train.shape)
-
-    checkpoint =  tf.keras.callbacks.ModelCheckpoint(filepath="../model/vae_model_30.h5", save_best_only=True, monitor="val_loss", mode="min")
-    #history = History()
-
-    vae.fit_generator(train_generator, steps_per_epoch=73593 // batch_size, epochs=epochs,
-                validation_data=validation_generator, validation_steps=10000 // batch_size, callbacks=[checkpoint])
-
-    vae.save("../model/vae_comp_model_30.h5")
-    del vae
-
-class inference(object):
+class inference_vae(object):
     def __init__(self, img_size):
         self.img_size = img_size
         self.input_shape = (img_size, img_size, 3)
@@ -134,6 +101,8 @@ class inference(object):
         self.filters = 16
         self.latent_dim = 2
         self.epochs = 30
+        self.z_mean = 0
+        self.z_log_var = 0
 
     """
     reparameterization trick
@@ -141,12 +110,12 @@ class inference(object):
     then z = z_mean+sqrt(var)*eps
     """
     def sampling(self, args):
-        z_mean, z_log_var = args
-        batch = tf.keras.backend.shape(z_mean)[0]
-        dim = tf.keras.backend.int_shape(z_mean)[1]
+        self.z_mean, self.z_log_var = args
+        batch = tf.keras.backend.shape(self.z_mean)[0]
+        dim = tf.keras.backend.int_shape(self.z_mean)[1]
         epsilon = tf.keras.backend.random_normal(shape=(batch,dim))
 
-        return z_mean + tf.keras.backend.exp(0.5*z_log_var) * epsilon
+        return self.z_mean + tf.keras.backend.exp(0.5*self.z_log_var) * epsilon
 
     """ build encoder architecture """
     def encoder_model(self):
@@ -159,16 +128,17 @@ class inference(object):
         shape = tf.keras.backend.int_shape(x)
         x = tf.keras.layers.Flatten()(x)
         x = tf.keras.layers.Dense(16, activation='relu')(x)
-        z_mean = tf.keras.layers.Dense(self.latent_dim, name='z_mean')(x)
-        z_log_var = tf.keras.layers.Dense(self.latent_dim, name='z_log_var')(x)
-        z = tf.keras.layers.Lambda(self.sampling, output_shape=(self.latent_dim, ), name='z')([z_mean, z_log_var])
+        self.z_mean = tf.keras.layers.Dense(self.latent_dim, name='z_mean')(x)
+        self.z_log_var = tf.keras.layers.Dense(self.latent_dim, name='z_log_var')(x)
+        z = tf.keras.layers.Lambda(self.sampling, output_shape=(self.latent_dim, ), name='z')([self.z_mean, self.z_log_var])
 
-        encoder = tf.keras.models.Model(inputs, [z_mean, z_log_var, z], name='encoder')
+        encoder = tf.keras.models.Model(inputs, [self.z_mean, self.z_log_var, z], name='encoder')
 
         #encoder.summary()
-        tf.keras.utils.plot_model(encoder, to_file='../model/vae_mnist/vae_cnn_encoder_md.png', show_shapes=True)
+        #tf.keras.utils.plot_model(encoder, to_file='../model/vae_mnist/vae_cnn_encoder_md.png', show_shapes=True)
 
-        return encoder, shape, inputs, z_mean, z_log_var
+        #return encoder, shape, inputs, z_mean, z_log_var
+        return encoder, shape, inputs
 
     """ build decoder architecture """
     def decoder_model(self, shape, encoder, inputs):
@@ -185,61 +155,43 @@ class inference(object):
         decoder = tf.keras.models.Model(latent_inputs, outputs, name='decoder')
 
         #decoder.summary()
-        tf.keras.utils.plot_model(decoder, to_file='../model/vae_mnist/vae_cnn_decoder_md.png', show_shapes=True)
+        #tf.keras.utils.plot_model(decoder, to_file='../model/vae_mnist/vae_cnn_decoder_md.png', show_shapes=True)
 
         outputs = decoder(encoder(inputs)[2])
         vae = tf.keras.models.Model(inputs, outputs, name='vae')
 
         return decoder, vae, outputs
 
+    def loss_fun(self, inputs, outputs, loss_type='mse'):
+        if loss_type == 'mse':
+            recont_loss = tf.keras.losses.mse(tf.keras.backend.flatten(inputs), tf.keras.backend.flatten(outputs))
+        else:
+            recont_loss = tf.keras.losses.binary_crossentropy(tf.keras.backend.flatten(inputs), tf.keras.backend.flatten())
+        recont_loss *= self.img_size*self.img_size
+        kl_loss = 1 + self.z_log_var - tf.keras.backend.square(self.z_mean) - tf.keras.backend.exp(self.z_log_var)
+        kl_loss = tf.keras.backend.sum(kl_loss, axis=-1)
+        kl_loss *= -0.5
+        vae_loss = tf.keras.backend.mean(recont_loss+kl_loss)
+
+        return vae_loss
+
 
     def train_min_samples(self, encoder, decoder, vae, inputs, outputs, z_mean, z_log_var, x_train, x_test):
         models = (encoder, decoder)
 
-        val_mse = True #use mse as of now
-        if val_mse:
-            reconstruction_loss = tf.keras.losses.mse(tf.keras.backend.flatten(inputs), tf.keras.backend.flatten(outputs))
-        else:
-            reconstruction_loss = tf.keras.losses.binary_crossentropy(tf.keras.backend.flatten(inputs), tf.keras.backend.flatten())
+        vae.compile(optimizer='rmsprop', loss = self.loss_fun, metrics=['acc'])
 
-        reconstruction_loss *= self.img_size*self.img_size
-        kl_loss = 1 + z_log_var - tf.keras.backend.square(z_mean) - tf.keras.backend.exp(z_log_var)
-        kl_loss = tf.keras.backend.sum(kl_loss, axis=-1)
-        kl_loss *= -0.5
-        vae_loss = tf.keras.backend.mean(reconstruction_loss + kl_loss)
+        #tf.keras.utils.plot_model(vae, to_file='../model/vae_mnist/vae_cnn_md.png', show_shapes=True)
 
-        vae.add_loss(vae_loss)
+        callbacks, curr_model_path = model_call_backs(FLAGS.output_path, 'vae_model.h5')
+        vae.fit(x_train, epochs=self.epochs, batch_size=self.batch_size, validation_data=(x_test, None), callbacks=callbacks)
 
-        vae.compile(optimizer='rmsprop', metrics=['acc'])
+        model_path = os.path.join(curr_model_path, 'vae_file_model.h5')
+        vae.save(model_path)
 
-        #vae.summary()
-        tf.keras.utils.plot_model(vae, to_file='../model/vae_mnist/vae_cnn_md.png', show_shapes=True)
-
-        vae.fit(x_train, epochs=self.epochs, batch_size=self.batch_size, validation_data=(x_test, None))
-
-        vae.save("path") #todo
-
-    def train_generator(self, encoder, decoder, inputs, outputs, z_mean, z_log_var, vae):
+    def train_generator(self, encoder, decoder, inputs, outputs, vae):
         models = (encoder, decoder)
-
-        def loss_fun(inputs, outputs):
-            val_mse = True
-            if val_mse:
-                reconstruction_loss = tf.keras.losses.mse(tf.keras.backend.flatten(inputs), tf.keras.backend.flatten(outputs))
-                #reconstruction_loss = mse(K.flatten(y_true), K.flatten(y_pred))
-            else:
-                reconstruction_loss = tf.keras.losses.binary_crossentropy(tf.keras.backend.flatten(inputs), tf.keras.backend.flatten())
-
-            reconstruction_loss *= self.img_size*self.img_size
-            kl_loss = 1 + z_log_var - tf.keras.backend.square(z_mean) - tf.keras.backend.exp(z_log_var)
-            kl_loss = tf.keras.backend.sum(kl_loss, axis=-1)
-            kl_loss *= -0.5
-            vae_loss = tf.keras.backend.mean(reconstruction_loss + kl_loss)
-
-            return vae_loss
-
-        #vae.add_loss(vae_loss)
-        vae.compile(optimizer='rmsprop', loss=loss_fun, metrics=['acc'])
+        vae.compile(optimizer='rmsprop', loss=self.loss_fun, metrics=['acc'])
 
         train_datagen = tf.keras.preprocessing.image.ImageDataGenerator(data_format='channels_last', rescale=1./255)
         test_datagen = tf.keras.preprocessing.image.ImageDataGenerator(data_format='channels_last', rescale=1./255)
@@ -247,15 +199,17 @@ class inference(object):
         train_generator = train_datagen.flow_from_directory(FLAGS.training_data_path, color_mode='rgb', class_mode='input', batch_size=self.batch_size)
         valid_generator = test_datagen.flow_from_directory(FLAGS.testing_data_path, color_mode='rgb', class_mode='input', batch_size=self.batch_size)
 
-        #vae.summary()
-        tf.keras.utils.plot_model(vae, to_file='../model/vae_mnist/vae_cnn_mdn.png', show_shapes=True)
+        #tf.keras.utils.plot_model(vae, to_file='../model/vae_mnist/vae_cnn_mdn.png', show_shapes=True)
 
         train_samples = train_generator.n//self.batch_size
         valid_samples = valid_generator.n//self.batch_size
 
-        vae.fit_generator(train_generator, steps_per_epoch= train_samples, epochs=self.epochs, validation_data=valid_generator, validation_steps = valid_samples, workers=16, use_multiprocessing=True)
+        callbacks, curr_model_path = model_call_backs(FLAGS.output_path, 'vae_model.h5')
+        vae.fit_generator(train_generator, steps_per_epoch= train_samples, epochs=self.epochs, validation_data=valid_generator, validation_steps = valid_samples, 
+                callbacks = callbacks, workers=16, use_multiprocessing=True)
 
-        vae.save("path")#todo
+        model_path = os.path.join(curr_model_path, 'vae_final_model.h5')
+        vae.save(model_path)
 
 def main():
     is_fit = False
@@ -265,14 +219,14 @@ def main():
         data = data_reading();
         img_size, x_train, x_test = data.create_data_numpy_arrays(FLAGS.training_data_path, FLAGS.testing_data_path)
 
-    arch = inference(img_size)
-    encoder, shape, inputs, z_mean, z_log_var = arch.encoder_model()
+    arch = inference_vae(img_size)
+    encoder, shape, inputs = arch.encoder_model()
     decoder, vae, outputs = arch.decoder_model(shape, encoder, inputs)
 
     if is_fit:
-        arch.train(encoder, decoder, vae, inputs, outputs, z_mean, z_log_var, x_train, x_test)
+        arch.train(encoder, decoder, vae, inputs, outputs, x_train, x_test)
 
-    arch.train_generator(encoder, decoder, inputs, outputs, z_mean, z_log_var, vae)
+    arch.train_generator(encoder, decoder, inputs, outputs, vae)
 
 if __name__ == "__main__":
     main()

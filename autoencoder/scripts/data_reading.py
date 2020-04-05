@@ -9,7 +9,7 @@ class data_reading(object):
     def __init__(self):
         pass
 
-    """ Read image and resize it using opencv python """
+    """ Read image and resize it using opencv-python """
     def get_img(self, path):
         img = cv.imread(path)
         resized_img = cv.resize(img, (128, 128))
@@ -58,12 +58,10 @@ class data_reading(object):
         #load training data
         train_data = self.load_train_data(training_data_path)
         x_train_data = np.array(train_data)
-        #print(x_train_data.shape)
 
         #load testing data
         test_data = self.load_test_data(testing_data_path)
         x_test_data = np.array(test_data)
-        #print(x_test_data.shape)
 
         #reshape and normalize
         img_size = x_train_data.shape[1]
@@ -71,28 +69,26 @@ class data_reading(object):
         x_test = np.reshape(x_test_data, [-1, img_size, img_size, 3])
         x_train = x_train_data.astype('float32') / 255
         x_test = x_test_data.astype('float32') / 255
-        #print(x_train.shape, x_test.shape)
 
         return img_size, x_train, x_test
 
-    def create_test_data_randomly():
-        src_path = "../data/movie_data/train/frames/"
-        dst_path = "../data/movie_data/test_small/"
+    """ separate test data from entire data """
+    def create_test_data_randomly(self, src_path, dst_path):
 
-        file_names_list = []
+        file_names = []
 
         for fname in os.listdir(src_path):
                 file_path = src_path+fname
-                file_names_list.append(file_path)
+                file_names.append(file_path)
 
-        no_of_test_files = 200
+        no_of_test_files = int(len(file_names)*0.2) #extract 20% of total images as test data
         for i in range(no_of_test_files):
-            ind = random.randint(0, len(file_names_list)-1)
-            src_path = file_names_list[ind]
-            file_names_list.pop(ind)
+            ind = random.randint(0, len(file_names)-1)
+            src_path = file_names[ind]
+            file_names.pop(ind)
             fdir, fname = os.path.split(src_path)
             fdst_path = dst_path+fname
-            shutil.move(src_path, fdst_path)
+            shutil.move(src_path, fdst_path) #move file to test folder
 
     def generate_data(directory, batch_size):
         i = 0
@@ -173,138 +169,137 @@ class data_reading(object):
         print('total no.of images:',count)
 
     def generate_unique_data(path):
-    global count
-    no_of_files = len(os.listdir(path))
-    file_names = []
-    dst_path = '/mnt/disks/slow1/video_processing/frames/final_unique_data/'
+        global count
+        no_of_files = len(os.listdir(path))
+        file_names = []
+        dst_path = '/mnt/disks/slow1/video_processing/frames/final_unique_data/'
 
-    for fname in os.listdir(path):
-        comp_file_path = path + '/' + fname
-        file_names.append(comp_file_path)
+        for fname in os.listdir(path):
+            comp_file_path = path + '/' + fname
+            file_names.append(comp_file_path)
 
-    ind = 0
-    if no_of_files <= 5: #consider only one frame
-        src_file_name = file_names[ind]
-        base, fname = os.path.split(src_file_name)
-        f, ext = fname.split('.')
-        dst_path_fname = dst_path + '/' + fname
-        shutil.copy(src_file_name, dst_path_fname)
-        new_file_path = dst_path + '/' + str(count)+'.'+ext
-        os.rename(dst_path_fname, new_file_path)
-        count += 1
-    elif no_of_files > 5 and no_of_files <=20: #consider a frame for every 5 frame
-        step = 5
-        while ind < no_of_files:
+        ind = 0
+        if no_of_files <= 5: #consider only one frame
             src_file_name = file_names[ind]
-            base, fnmae = os.path.split(src_file_name)
+            base, fname = os.path.split(src_file_name)
             f, ext = fname.split('.')
             dst_path_fname = dst_path + '/' + fname
             shutil.copy(src_file_name, dst_path_fname)
             new_file_path = dst_path + '/' + str(count)+'.'+ext
             os.rename(dst_path_fname, new_file_path)
             count += 1
-            ind += step
-    elif no_of_files > 20: #consider 1 file for every 8 files
-        step = 10
-        while ind < no_of_files:
-            src_file_name = file_names[ind]
-            base, fname = os.path.split(src_file_name)
-            f, ext = fname.split('.')
-            dst_path_fname = dst_path+'/'+fname
-            shutil.copy(src_file_name, dst_path_fname)
-            new_file_path = dst_path + '/' + str(count)+'.'+ext
-            os.rename(dst_path_fname, new_file_path)
-            count += 1
-            ind += step
+        elif no_of_files > 5 and no_of_files <=20: #consider a frame for every 5 frame
+            step = 5
+            while ind < no_of_files:
+                src_file_name = file_names[ind]
+                base, fnmae = os.path.split(src_file_name)
+                f, ext = fname.split('.')
+                dst_path_fname = dst_path + '/' + fname
+                shutil.copy(src_file_name, dst_path_fname)
+                new_file_path = dst_path + '/' + str(count)+'.'+ext
+                os.rename(dst_path_fname, new_file_path)
+                count += 1
+                ind += step
+        elif no_of_files > 20: #consider 1 file for every 8 files
+            step = 10
+            while ind < no_of_files:
+                src_file_name = file_names[ind]
+                base, fname = os.path.split(src_file_name)
+                f, ext = fname.split('.')
+                dst_path_fname = dst_path+'/'+fname
+                shutil.copy(src_file_name, dst_path_fname)
+                new_file_path = dst_path + '/' + str(count)+'.'+ext
+                os.rename(dst_path_fname, new_file_path)
+                count += 1
+                ind += step
 
-    #copy last file
-    src_file_name = file_names[no_of_files-1]
-    base, fname = os.path.split(src_file_name)
-    dst_path_fname = dst_path+'/'+fname
-    shutil.copy(src_file_name, dst_path_fname)
+        #copy last file
+        src_file_name = file_names[no_of_files-1]
+        base, fname = os.path.split(src_file_name)
+        dst_path_fname = dst_path+'/'+fname
+        shutil.copy(src_file_name, dst_path_fname)
 
 
     #parse all the clusters of data and create unique data set
-def create_train_valid_from_clusters(path):
-    for seg_fold in os.listdir(path):
-        seg_path = path + seg_fold
-        for sub_seg_fold in os.listdir(seg_path):
-            sub_seg_path = seg_path + '/' + sub_seg_fold +'/'+'imagecluster'+'/'+'clusters'
-            for clusters_fold in os.listdir(sub_seg_path):
-                clusters_path = sub_seg_path + '/'+clusters_fold
-                for cluster_fold in os.listdir(clusters_path):
-                    final_cluster_path = clusters_path + '/' + cluster_fold
-                    generate_unique_data(final_cluster_path)
+    def create_train_valid_from_clusters(path):
+        for seg_fold in os.listdir(path):
+            seg_path = path + seg_fold
+            for sub_seg_fold in os.listdir(seg_path):
+                sub_seg_path = seg_path + '/' + sub_seg_fold +'/'+'imagecluster'+'/'+'clusters'
+                for clusters_fold in os.listdir(sub_seg_path):
+                    clusters_path = sub_seg_path + '/'+clusters_fold
+                    for cluster_fold in os.listdir(clusters_path):
+                        final_cluster_path = clusters_path + '/' + cluster_fold
+                        generate_unique_data(final_cluster_path)
 
-#check if image is valid using opencv
-def check_if_image_is_valid():
-    for fname in os.listdir(path):
-        comp_path = path+fname
-        #print(comp_path)
-        img = cv2.imread(comp_path)
-        if img is None:
-            print(comp_path)
-            continue
+    #check if image is valid using opencv
+    def check_if_image_is_valid():
+        for fname in os.listdir(path):
+            comp_path = path+fname
+            #print(comp_path)
+            img = cv2.imread(comp_path)
+            if img is None:
+                print(comp_path)
+                continue
 
-        # tried spliting whole dataset as two halfs
-def split_data_set(path):
-    file_names = []
+    # tried spliting whole dataset as two halfs
+    def split_data_set(path):
+        file_names = []
 
-    for fname in os.listdir(path):
-        com_fname = path + fname
-        file_names.append(com_fname)
+        for fname in os.listdir(path):
+            com_fname = path + fname
+            file_names.append(com_fname)
 
-    print(len(file_names))
-    sorted(file_names)
-    new_path_1 = '/mnt/disks/slow1/video_processing/frames/breaking_bad_s01e07_1/'
-    if not os.path.exists(new_path_1):
-        os.makedirs(new_path_1)
+        print(len(file_names))
+        sorted(file_names)
+        new_path_1 = '/mnt/disks/slow1/video_processing/frames/breaking_bad_s01e07_1/'
+        if not os.path.exists(new_path_1):
+            os.makedirs(new_path_1)
 
-    new_path_2 = '/mnt/disks/slow1/video_processing/frames/breaking_bad_s01e07_2/'
-    if not os.path.exists(new_path_2):
-        os.makedirs(new_path_2)
+        new_path_2 = '/mnt/disks/slow1/video_processing/frames/breaking_bad_s01e07_2/'
+        if not os.path.exists(new_path_2):
+            os.makedirs(new_path_2)
 
-    end_ind = len(file_names)
-    count = 0
-    mid_ind = int(end_ind / 2)
-    while count < end_ind:
-        fname = file_names[count]
-        head, tail = os.path.split(fname)
+        end_ind = len(file_names)
+        count = 0
+        mid_ind = int(end_ind / 2)
+        while count < end_ind:
+            fname = file_names[count]
+            head, tail = os.path.split(fname)
 
-        if count < mid_ind:
-            dst_path = new_path_1 + tail
-        else:
-            dst_path = new_path_2 + tail
+            if count < mid_ind:
+                dst_path = new_path_1 + tail
+            else:
+                dst_path = new_path_2 + tail
 
-        shutil.copy(fname, dst_path)
-        count += 1
-
-        #copy file from src to dst path and rename file which is in dst path
-def copy_files(src_path, dst_path, rename_file_path):
-    shutil.copy(src_path, dst_path)
-    os.rename(dst_path, rename_file_path)
-
-    def get_all_data_in_folder():
-    path = '../../../frames/'
-    dst_path = "../data/movie_data/train_bbs/frames/"
-    if not os.path.exists(dst_path):
-        os.makedirs(dst_path)
-
-    count = 0
-    for sub_fold_name in os.listdir(path):
-        comp_sub_fold_path = path+sub_fold_name
-        print(comp_sub_fold_path)
-        for fname in os.listdir(comp_sub_fold_path):
-            src_file_path = comp_sub_fold_path+'/'+fname
-            base, ext = fname.split('.')
-            dst_file_path = dst_path+fname
-            rename_file_path = dst_path + str(count) + ".jpg"
-            copy_files(src_file_path, dst_file_path, rename_file_path)
+            shutil.copy(fname, dst_path)
             count += 1
 
+    """ copy file from src to dst path and rename file which is in dst path """
+    def copy_files(src_path, dst_path, rename_file_path):
+        shutil.copy(src_path, dst_path)
+        os.rename(dst_path, rename_file_path)
 
-            #create test data randomly picking up files
-def create_test_data_randomly():
+    def get_all_data_in_folder():
+        path = '../../../frames/'
+        dst_path = "../data/movie_data/train_bbs/frames/"
+        if not os.path.exists(dst_path):
+            os.makedirs(dst_path)
+
+        count = 0
+        for sub_fold_name in os.listdir(path):
+            comp_sub_fold_path = path+sub_fold_name
+            for fname in os.listdir(comp_sub_fold_path):
+                src_file_path = comp_sub_fold_path+'/'+fname
+                base, ext = fname.split('.')
+                dst_file_path = dst_path+fname
+                rename_file_path = dst_path + str(count) + ".jpg"
+                copy_files(src_file_path, dst_file_path, rename_file_path)
+                count += 1
+
+
+    """ create test data randomly picking up files """
+    def create_test_data_randomly():
         file_names_list = []
 
         for fname in os.listdir(src_path):
@@ -321,45 +316,66 @@ def create_test_data_randomly():
                 shutil.move(src_path, fdst_path)
 
 
-                #to make predict_gen work, changed the path of original frames path
-def create_new_folder_structure_predict_gen():
-    parent_path = "/mnt/disks/slow1/video_processing/small_video_clip_frames_keras/small_video_clip_frames/"
-    for sub_path in os.listdir(parent_path):
-        sub_sub_path = parent_path + sub_path
-        for fin_path in os.listdir(sub_sub_path):
-            comp_path = sub_sub_path + '/'+ fin_path
-            dst_path = comp_path + '/' + 'frames'
-            if os.path.exists(dst_path):
-                shutil.rmtree(dst_path)
-            for f_name in os.listdir(comp_path):
-                file_path = comp_path + '/' + f_name
-                new_dst_path = comp_path + '/' + 'frames'
-                if not os.path.exists(new_dst_path):
-                    os.makedirs(new_dst_path)
-                dst_file_path = new_dst_path + '/' + f_name
-                shutil.move(file_path, dst_file_path)
+    """ to make predict_gen work, changed the path of original frames path """
+    def create_new_folder_structure_predict_gen():
+        parent_path = "/mnt/disks/slow1/video_processing/small_video_clip_frames_keras/small_video_clip_frames/"
+        for sub_path in os.listdir(parent_path):
+            sub_sub_path = parent_path + sub_path
+            for fin_path in os.listdir(sub_sub_path):
+                comp_path = sub_sub_path + '/'+ fin_path
+                dst_path = comp_path + '/' + 'frames'
+                if os.path.exists(dst_path):
+                    shutil.rmtree(dst_path)
+                for f_name in os.listdir(comp_path):
+                    file_path = comp_path + '/' + f_name
+                    new_dst_path = comp_path + '/' + 'frames'
+                    if not os.path.exists(new_dst_path):
+                        os.makedirs(new_dst_path)
+                    dst_file_path = new_dst_path + '/' + f_name
+                    shutil.move(file_path, dst_file_path)
 
-                #suppose to remove older feature vectors folder
-def remove_folders():
-    parent_path = "/mnt/disks/slow1/video_processing/small_video_clip_frames_keras/small_video_clip_frames/"
-    for sub_path in os.listdir(parent_path):
-        comp_path_so_far = parent_path + sub_path
-        for sub_sub_path in os.listdir(comp_path_so_far):
-            final_sub_path = comp_path_so_far + '/' + sub_sub_path
-            for fname in os.listdir(final_sub_path+'/'+'frames'):
+    """ suppose to remove older feature vectors folder """
+    def remove_folders():
+        parent_path = "/mnt/disks/slow1/video_processing/small_video_clip_frames_keras/small_video_clip_frames/"
+        for sub_path in os.listdir(parent_path):
+            comp_path_so_far = parent_path + sub_path
+            for sub_sub_path in os.listdir(comp_path_so_far):
+                final_sub_path = comp_path_so_far + '/' + sub_sub_path
+                for fname in os.listdir(final_sub_path+'/'+'frames'):
                     if fname == 'feature_vectors_plf' or fname == 'feature_vectors' or fname == 'scalars':
                         fin_comp_path = final_sub_path+'/'+'frames'+'/'+fname
-                        print(fin_comp_path)
 
-                        #remove .json files which are in segmented folders to create clusters
-def remove_unnecessary_files(path):
-    for sub_fold in os.listdir(path):
-        sub_fold_path = path+sub_fold
-        for sub_sub_fold in os.listdir(sub_fold_path):
-            sub_sub_path = sub_fold_path + '/' + sub_sub_fold
-            for fname in os.listdir(sub_sub_path):
-                comp_path = sub_sub_path + '/' + fname
-                base, ext = fname.split('.')
-                if ext != 'jpg':
-                    print(comp_path)
-                    os.remove(comp_path)
+    """ remove .json files which are in segmented folders to create clusters """
+    def remove_unnecessary_files(path):
+        for sub_fold in os.listdir(path):
+            sub_fold_path = path+sub_fold
+            for sub_sub_fold in os.listdir(sub_fold_path):
+                sub_sub_path = sub_fold_path + '/' + sub_sub_fold
+                for fname in os.listdir(sub_sub_path):
+                    comp_path = sub_sub_path + '/' + fname
+                    base, ext = fname.split('.')
+                    if ext != 'jpg':
+                        os.remove(comp_path)
+
+    """ Generator to yield inputs and their labels in batches."""
+    def data_gen(top_dim):
+        batch_size = 32
+        while True:
+            batch_imgs = []
+            batch_labels = []
+            for i in range(batch_size):
+                # Create random arrays
+                rand_pix = np.random.randint(100, 256)
+                top_img = np.full(top_dim, rand_pix)
+
+                # Set a label
+                label = np.random.choice([0, 1])
+
+                #batch_imgs.append([top_img, bot_img])
+                batch_imgs.append(top_img)
+                batch_labels.append(label)
+            
+            np_batch_imgs = np.array(batch_imgs)
+            np_labels = (np.array(batch_labels))
+            print(np_batch_imgs.shape, np_labels.shape)
+            yield (np_batch_imgs, np_labels)
