@@ -1,110 +1,102 @@
-from keras.models import load_model, Model
-from keras.preprocessing.image import ImageDataGenerator
+import setGPU
+
+import tensorflow as tf
 
 import os
 import scipy.io as sio
-import argparse
 
-from cnn_custom_ae_train import custom_generator
+flags = tf.app.flags
+FLAGS = flags.FLAGS
 
-class ArgParser(argparse.ArgumentParser):
-    def error(self, message):
-        sys.stderr.write('ERROR: {}\n\n'.format(message))
-        self.print_help()
-        sys.exit(2)
+flags.DEFINE_string("data_path", "/mnt/data/Veeru_backup/cv_exp/data/movie_titles/ae_models_test_data/",  'path where data presents')
+flags.DEFINE_string("model_path", "/mnt/data/Veeru_backup/cv_exp/src/AE/outputs/model/Apr-03-20/aecnn_MD_final.h5", 'path where model presents')
 
-"""
-load complete auto encoder model
+class feature_extraction(object):
+    def __init__(self):
+        self.batch_size = 32
+        self.target_size = 224
+
+    """
+    load complete auto encoder model
 	model_path: path where model file presents
-"""
-def load_cnn_ae_model(model_path):
-    cnn_ae = load_model(model_path)
-    return cnn_ae
+    """
+    def load_ae_model(self, model_path):
+        model = tf.keras.models.load_model(model_path)
+        return model
 
-"""
-extract encoder only from auto encoder model
+    """
+    extract encoder only from auto encoder model
 	cnn_ae: complete AE model object
-"""
-def extract_encoder_from_model(cnn_ae):
-    encoder = Model(inputs=cnn_ae.input, outputs=cnn_ae.get_layer('encoder').output)
-    return encoder
+    """
+    def extract_encoder_from_model(self, model):
+        encoder = tf.keras.models.Model(inputs=model.input, outputs=model.get_layer('encoder').output)
+        return encoder
 
-"""
-extract features/bottlenecks from the smaller clip frames using AutoEncoder
+    """
+    extract features/bottlenecks from the smaller clip frames using AutoEncoder
 	encoder: encoder from AE model
-	data_path: data files path
-"""
-def extract_features(encoder, data_path, fv_folder_name):
+	data_path: data files path where one level up from images
+    """
+    def extract_features_idg(self, encoder, data_path):
 
-    for sub_path in os.listdir(data_path):
-        comp_sub_path = data_path + sub_path
-        print(comp_sub_path)
-        for sub_sub_path in os.listdir(comp_sub_path):
-	    #print(sub_sub_path)
-            comp_path = comp_sub_path + '/'+ sub_sub_path + '/' + 'frames'
-            gen_path = comp_sub_path + '/' + sub_sub_path
+        """ use keras generator and call predict_generator """
+        test_datagen = tf.keras.preprocessing.image.ImageDataGenerator(rescale=1./255)
+        test_generator = test_datagen.flow_from_directory(data_path, target_size =(self.target_size, self.target_size), color_mode='rgb', batch_size=self.batch_size)
 
-            no_of_images = len(os.listdir(comp_path))
-            #print(no_of_images)
-            nb_batch_size = no_of_images 
+        file_names = test_generator.filenames
 
-            """ use keras generator and call predict_generator """
-            test_datagen = ImageDataGenerator(rescale=1./255)
-            test_generator = test_datagen.flow_from_directory(gen_path, target_size =(224,224), color_mode='rgb', batch_size=nb_batch_size)
+        remainder = test_generator.n%self.batch_size
+        if remainder != 0:
+            samples_per_batch = (test_generator.n//self.batch_size)+1
+        else:
+            samples_per_batch = (test_generator.n//self.batch_size)
+        predict_out = encoder.predict_generator(test_generator, steps=int(samples_per_batch))
 
-            file_names = test_generator.filenames
-            nb_samples = len(file_names)
-            predict_out = encoder.predict_generator(test_generator, steps=int(nb_samples/nb_batch_size))
+        """ create folder and save features vectors
+        dst_file_path = os.path.join(data_path, fv_folder_name)
+        if not os.path.exists(dst_file_path):
+            os.makedirs(dst_file_path)
+        fname = sub_sub_path+'.mat'
+        dst_fin_file_path = os.path.join(dst_file_path, fname)
+        sio.savemat(dst_fin_file_path, {'logits':predict_out})"""
 
-            """ create folder and save features vectors """
-            dst_file_path = gen_path + '/' + fv_folder_name
-	    print(dst_file_path)
-	    if not os.path.exists(dst_file_path):
-	        os.makedirs(dst_file_path)
-            fname = sub_sub_path+'.mat'
-            dst_fin_file_path = dst_file_path + '/' + fname
-	    #print(dst_fin_file_path)
-	    sio.savemat(dst_fin_file_path, {'logits':predict_out})
+        return predict_out, file_names
 
-"""
-extract features using autoencoder by giving all the data once
+    """
+    extract features using autoencoder by giving all the data once
 	encder: encoder from auto encoder
-"""
-def extract_features_frames(encoder):
-    data_path = '/mnt/disks/slow1/video_processing/exp/AE_arch/data/movie_data/train_bbs/'
-    nb_batch_size = 256
-    nb_samples = len(os.listdir(data_path+'frames'))
+    """
+    def extract_features_cg(self, encoder, data_path):
+        nb_samples = len(os.listdir(data_path))
 	
-    #test_datagen = ImageDataGenerator(rescale=1./255)
-    test_datagen = custom_generator(data_path, nb_samples, nb_batch_size, 128)
-    test_generator = test_datagen.flow_from_directory(data_path, target_size=(128,128), color_mode='rgb', batch_size=nb_batch_size)
-    predict_out = encoder.predict_generator(test_generator, steps=int(nb_samples/nb_batch_size))
-    dst_file_path = data_path + 'feature_vectors_ae'
-    if not os.path.exists(dst_file_path):
-	os.makedirs(dst_file_path)
-    fname = 'bbs_feature_vectors_ae.mat'
-    fin_dst_file_path = dst_file_path + '/' + fname
-    sio.savemat(fin_dst_file_path, {'logits':predict_out})
+        test_datagen = custom_generator(data_path, nb_samples, self.batch_size, self.target_size)
+        test_generator = test_datagen.flow_from_directory(data_path, target_size=(self.target_size, self.target_size), color_mode='rgb', batch_size=self.batch_size)
 
+        predict_out = encoder.predict_generator(test_generator, steps=int(nb_samples/self.batch_size))
+
+        dst_file_path = os.path.join(data_path, 'feature_vectors_ae')
+        if not os.path.exists(dst_file_path):
+            os.makedirs(dst_file_path)
+        fin_dst_file_path = os.path.join(dst_file_path, 'feature_vectors_ae.mat')
+        sio.savemat(fin_dst_file_path, {'logits':predict_out})
 
 def main():
-    parser = ArgParser(description="Extract feature vector from the AutoEncoder model")
-    required_args = parser.add_argument_group("Mandatory arguments")
-    required_args.add_argument("--model_path", dest="model_path", type=str, required=True, help="path of the autoencoder model")
-    required_args.add_argument("--data_path", dest = "data_path", type=str, required=True, help="path where data presents, path should be three level up from frames")
-    required_args.add_argument("--fv_folder_name", dest="fv_folder_name", type=str, required=True, help="feature vector(FV) folder name in which file will be stored")
-    args = parser.parse_args()
+
+    is_cg = False #select the generator between tf.keras.preprocessing.image.ImageDataGenerator or tf.keras.utils.Sequence
+
+    feat_ext = feature_extraction()
 
     """ load model and extract encoder from complete autoencder model """
-    cnn_ae = load_cnn_ae_model(args.model_path)
-    encoder = extract_encoder_from_model(cnn_ae)
+    model = feat_ext.load_cnn_ae_model(FLAGS.model_path)
+    encoder_model = feat_ext.extract_encoder_from_model(model)
 
-    """ extract features using auto encoder """
-    print(args.fv_folder_name)
-    extract_features(encoder, args.data_path, args.fv_folder_name)
+    if is_cg == False:
+        """ extract features using auto encoder model """
+        feat_ext.extract_features_idg(encoder_model, FLAGS.data_path)
 	
-    """ extract features using auto encoder by directly feeding all the images once """
-    #extract_features(encoder)
+    else:
+        """ extract features using auto encoder by directly feeding all the images once """
+        extract_features_cg(encoder_model, FLAGS.data_path)
 
 if __name__ == "__main__":
     main()

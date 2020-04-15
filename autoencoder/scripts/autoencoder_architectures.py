@@ -139,8 +139,7 @@ class VGG16AutoEncoder:
     def __init__(self, input_shape, weight_file: str, num_of_layers_to_freeze_from_input_layer: int):
         self.encoder = VGG16Encoder(input_shape=input_shape, weight_file=weight_file, num_of_layers_to_freeze_from_input_layer=num_of_layers_to_freeze_from_input_layer).encoder
         self.decoder = Decoder(self.encoder).decoder
-        self.auto_encoder = Model(inputs=self.encoder.inputs, outputs=self.decoder)
-        #print(self.auto_encoder.summary())
+        self.auto_encoder = tf.keras.models.Model(inputs=self.encoder.inputs, outputs=self.decoder)
 
 class VGG16Encoder:
     def __init__(self, input_shape, weight_file: str, num_of_layers_to_freeze_from_input_layer: int):
@@ -149,29 +148,29 @@ class VGG16Encoder:
         self.encoder = self.__freeze_weights(self.encoder, num_of_layers_to_freeze_from_input_layer)
 
     def __get_encoder(self, input_shape):
-        return Sequential([
-        Conv2D(64, (3, 3), input_shape=input_shape, padding='same', activation='relu'),
-        Conv2D(64, (3, 3), activation='relu', padding='same'),
-        MaxPooling2D(pool_size=(2, 2), strides=(2, 2)),
+        return tf.keras.models.Sequential([
+        tf.keras.layers.Conv2D(64, (3, 3), input_shape=input_shape, padding='same', activation='relu'),
+        tf.keras.layers.Conv2D(64, (3, 3), activation='relu', padding='same'),
+        tf.keras.layers.MaxPooling2D(pool_size=(2, 2), strides=(2, 2)),
 
-        Conv2D(128, (3, 3), activation='relu', padding='same'),
-        Conv2D(128, (3, 3), activation='relu', padding='same'),
-        MaxPooling2D(pool_size=(2, 2), strides=(2, 2)),
+        tf.keras.layers.Conv2D(128, (3, 3), activation='relu', padding='same'),
+        tf.keras.layers.Conv2D(128, (3, 3), activation='relu', padding='same'),
+        tf.keras.layers.MaxPooling2D(pool_size=(2, 2), strides=(2, 2)),
 
-        Conv2D(256, (3, 3), activation='relu', padding='same'),
-        Conv2D(256, (3, 3), activation='relu', padding='same'),
-        Conv2D(256, (3, 3), activation='relu', padding='same'),
-        MaxPooling2D(pool_size=(2, 2), strides=(2, 2)),
+        tf.keras.layers.Conv2D(256, (3, 3), activation='relu', padding='same'),
+        tf.keras.layers.Conv2D(256, (3, 3), activation='relu', padding='same'),
+        tf.keras.layers.Conv2D(256, (3, 3), activation='relu', padding='same'),
+        tf.keras.layers.MaxPooling2D(pool_size=(2, 2), strides=(2, 2)),
 
-        Conv2D(512, (3, 3), activation='relu', padding='same'),
-        Conv2D(512, (3, 3), activation='relu', padding='same'),
-        Conv2D(512, (3, 3), activation='relu', padding='same'),
-        MaxPooling2D(pool_size=(2, 2), strides=(2, 2)),
+        tf.keras.layers.Conv2D(512, (3, 3), activation='relu', padding='same'),
+        tf.keras.layers.Conv2D(512, (3, 3), activation='relu', padding='same'),
+        tf.keras.layers.Conv2D(512, (3, 3), activation='relu', padding='same'),
+        tf.keras.layers.MaxPooling2D(pool_size=(2, 2), strides=(2, 2)),
 
-        Conv2D(512, (3, 3), activation='relu', padding='same'),
-        Conv2D(512, (3, 3), activation='relu', padding='same'),
-        Conv2D(512, (3, 3), activation='relu', padding='same'),
-        AveragePooling2D(pool_size=(2, 2), strides=(2, 2), name='encoder'),])
+        tf.keras.layers.Conv2D(512, (3, 3), activation='relu', padding='same'),
+        tf.keras.layers.Conv2D(512, (3, 3), activation='relu', padding='same'),
+        tf.keras.layers.Conv2D(512, (3, 3), activation='relu', padding='same'),
+        tf.keras.layers.AveragePooling2D(pool_size=(2, 2), strides=(2, 2), name='encoder'),])
 
     def __freeze_weights(self, encoder, num_of_layers_to_freeze_from_input_layer: int):
         for i in range(num_of_layers_to_freeze_from_input_layer):
@@ -184,23 +183,23 @@ class Decoder:
         self.decoder = self.__get_decoder(encoder)
 
     def __get_decoder(self, encoder):
-        decoded_encoder = Dense(784, activation='relu')(encoder.output)
-        decoded_encoder = Conv2D(filters=16, kernel_size=(3, 3), strides=(1, 1), padding='same', activation='relu')(decoded_encoder)
-        decoded_encoder = UpSampling2D(size=(2, 2))(decoded_encoder)
+        decoded_encoder = tf.keras.layers.Dense(784, activation='relu')(encoder.output)
+        decoded_encoder = tf.keras.layers.Conv2D(filters=16, kernel_size=(3, 3), strides=(1, 1), padding='same', activation='relu')(decoded_encoder)
+        decoded_encoder = tf.keras.layers.UpSampling2D(size=(2, 2))(decoded_encoder)
 
-        decoded_encoder = Conv2D(filters=32, kernel_size=(3, 3), strides=(1, 1), padding='same', activation='relu')(decoded_encoder)
-        decoded_encoder = UpSampling2D(size=(2, 2))(decoded_encoder)
+        decoded_encoder = tf.keras.layers.Conv2D(filters=32, kernel_size=(3, 3), strides=(1, 1), padding='same', activation='relu')(decoded_encoder)
+        decoded_encoder = tf.keras.layers.UpSampling2D(size=(2, 2))(decoded_encoder)
 
-        decoded_encoder = Conv2D(filters=64, kernel_size=(3, 3), strides=(1, 1), padding='same', activation='relu')(decoded_encoder)
-        decoded_encoder = UpSampling2D(size=(2, 2))(decoded_encoder)
+        decoded_encoder = tf.keras.layers.Conv2D(filters=64, kernel_size=(3, 3), strides=(1, 1), padding='same', activation='relu')(decoded_encoder)
+        decoded_encoder = tf.keras.layers.UpSampling2D(size=(2, 2))(decoded_encoder)
 
-        decoded_encoder = Conv2D(filters=128, kernel_size=(3, 3), strides=(1, 1), padding='same', activation='relu')(decoded_encoder)
-        decoded_encoder = UpSampling2D(size=(2, 2))(decoded_encoder)
+        decoded_encoder = tf.keras.layers.Conv2D(filters=128, kernel_size=(3, 3), strides=(1, 1), padding='same', activation='relu')(decoded_encoder)
+        decoded_encoder = tf.keras.layers.UpSampling2D(size=(2, 2))(decoded_encoder)
 
-        decoded_encoder = Conv2D(filters=64, kernel_size=(3, 3), strides=(1, 1), padding='same', activation='relu')(decoded_encoder)
-        decoded_encoder = UpSampling2D(size=(2, 2))(decoded_encoder)
+        decoded_encoder = tf.keras.layers.Conv2D(filters=64, kernel_size=(3, 3), strides=(1, 1), padding='same', activation='relu')(decoded_encoder)
+        decoded_encoder = tf.keras.layers.UpSampling2D(size=(2, 2))(decoded_encoder)
 
-        decoder = Conv2D(filters=3, kernel_size=(3, 3), strides=(1, 1), padding='same', activation='sigmoid')(decoded_encoder)
+        decoder = tf.keras.layers.Conv2D(filters=3, kernel_size=(3, 3), strides=(1, 1), padding='same', activation='sigmoid')(decoded_encoder)
 
         return decoder
 
@@ -212,7 +211,6 @@ class inceptionAutoencoder(object):
         self.input_img = tf.keras.layers.Input(shape=input_shape, name='encoder_input')
 
         self.encoder = InceptionEncoder(self.input_img).encoder
-        #self.encoder_model = Model(inputs=self.input_img, outputs=self.encoder)
         self.decoder = InceptionDecoder(self.encoder).decoder
 
         self.autoencoder = tf.keras.models.Model(inputs=self.input_img, outputs=self.decoder)
@@ -246,7 +244,6 @@ class InceptionEncoder(object):
 
     """ Encoder architecture which is based on inception """
     def __get_encoder(self, input_img):
-        #input_layer = Input(shape = input_shape)
 
         x = tf.keras.layers.Conv2D(64, (7,7), padding='same', strides=(2, 2), activation='relu', name='conv_1_7x7/2', kernel_initializer=self.kernel_init, bias_initializer=self.bias_init)(input_img)
         x = tf.keras.layers.MaxPool2D((3, 3), padding='same', strides=(2, 2), name='max_pool_1_3x3/2')(x)
@@ -261,7 +258,6 @@ class InceptionEncoder(object):
         x = tf.keras.layers.MaxPool2D((3,3), padding='same', strides=(2, 2), name='max_pool_3_3x3/2')(x)
 
         x = self.__inception_module(x, filters_1x1=192, filters_3x3_reduce=96, filters_3x3=208, filters_5x5_reduce=16, filters_5x5=48, filters_pool_proj=64 , name='inception_4a')
-        #x = AveragePooling2D((5, 5), strides=3)(x)
         x = tf.keras.layers.AveragePooling2D((2, 2), strides=2)(x)
 
         x = tf.keras.layers.Conv2D(128, (1, 1), padding='same', activation='relu', name='encoder')(x)
@@ -288,7 +284,6 @@ class InceptionDecoder(object):
         conv_5x5 = tf.keras.layers.Conv2DTranspose(filters_5x5_reduce, (1, 1), padding='same', activation = 'relu', kernel_initializer=self.kernel_init, bias_initializer=self.bias_init)(x)
         conv_5x5 = tf.keras.layers.Conv2DTranspose(filters_5x5, (5, 5), padding='same', activation = 'relu', kernel_initializer=self.kernel_init, bias_initializer=self.bias_init)(conv_5x5)
 
-        #pool_proj = MaxPool2D((3, 3), strides = (1, 1), padding='same')(x)
         pool_proj = tf.keras.layers.Conv2DTranspose(filters_pool_proj, (1, 1), padding='same', activation='relu', kernel_initializer=self.kernel_init, bias_initializer=self.bias_init)(conv_5x5)
 
         output = tf.keras.layers.concatenate([conv_1x1, conv_3x3, conv_5x5, pool_proj], axis=3, name=name)
@@ -298,20 +293,16 @@ class InceptionDecoder(object):
     def __get_decoder(self, encoder):
         x = tf.keras.layers.Conv2DTranspose(64, (7,7), padding='same', strides=(2, 2), activation='relu', name='convTran_1_7x7/2',
                 kernel_initializer=self.kernel_init, bias_initializer=self.bias_init)(encoder)
-        #x = MaxPool2D((3, 3), padding='same', strides=(2, 2), name='max_pool_1_3x3/2')(x)
 
         x = tf.keras.layers.Conv2DTranspose(64, (1, 1), padding='same', strides=(1, 1), activation='relu', name='convTran_2a_3x3/1')(x)
         x = tf.keras.layers.Conv2DTranspose(192, (3, 3), padding='same', strides=(2, 2), activation='relu', name='convTran_2b_3x3/1')(x)
-        #x = MaxPool2D((3, 3), padding='same', strides=(2, 2), name='max_pool_2_3x3/2')(x)
 
         x = self.__inception_module(x, filters_1x1=64, filters_3x3_reduce=96, filters_3x3=128, filters_5x5_reduce=16, filters_5x5=32, filters_pool_proj=32, name='inceptionCT_3a')
 
         x = self.__inception_module(x, filters_1x1=128, filters_3x3_reduce=128, filters_3x3=192, filters_5x5_reduce=32, filters_5x5=96, filters_pool_proj=64 , name='inceptionCT_3b')
         x = tf.keras.layers.Conv2DTranspose(128, (3, 3), padding='same', strides=(2, 2), activation='relu', name='convTran_3b_3x3/1')(x)
-        #x = MaxPool2D((3,3), padding='same', strides=(2, 2), name='max_pool_3_3x3/2')(x)
 
         x = self.__inception_module(x, filters_1x1=192, filters_3x3_reduce=96, filters_3x3=208, filters_5x5_reduce=16, filters_5x5=48, filters_pool_proj=64 , name='inceptionCT_4a')
-        #x = AveragePooling2D((5, 5), strides=3)(x)
         x = tf.keras.layers.Conv2DTranspose(128, (3, 3), padding='same', strides=(2, 2), activation='relu', name='convTran_4a_3x3/1')(x)
 
         x = tf.keras.layers.Conv2DTranspose(128, (3, 3), padding='same', strides=(2, 2), activation='relu', name='convTran_4a_1_3x3/1')(x)

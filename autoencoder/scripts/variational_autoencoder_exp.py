@@ -7,6 +7,7 @@ import cv2 as cv
 import numpy as np
 
 from common import *
+from data_reading import *
 
 flags = tf.app.flags
 FLAGS = flags.FLAGS
@@ -176,7 +177,7 @@ class inference_vae(object):
         return vae_loss
 
 
-    def train_min_samples(self, encoder, decoder, vae, inputs, outputs, z_mean, z_log_var, x_train, x_test):
+    def train_min_samples(self, encoder, decoder, vae, inputs, outputs, x_train, x_test):
         models = (encoder, decoder)
 
         vae.compile(optimizer='rmsprop', loss = self.loss_fun, metrics=['acc'])
@@ -224,7 +225,7 @@ def main():
     decoder, vae, outputs = arch.decoder_model(shape, encoder, inputs)
 
     if is_fit:
-        arch.train(encoder, decoder, vae, inputs, outputs, x_train, x_test)
+        arch.train_min_samples(encoder, decoder, vae, inputs, outputs, x_train, x_test)
 
     arch.train_generator(encoder, decoder, inputs, outputs, vae)
 

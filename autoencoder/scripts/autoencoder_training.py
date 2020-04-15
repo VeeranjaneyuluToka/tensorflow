@@ -16,7 +16,7 @@ FLAGS = flags.FLAGS
 
 flags.DEFINE_string('train_data_dir', '/mnt/data/Veeru_backup/cv_exp/data/movie_titles/mini_data/train/', 'training data directory path')
 flags.DEFINE_string('valid_data_dir', '/mnt/data/Veeru_backup/cv_exp/data/movie_titles/mini_data/validation/', 'testing data directory path')
-flags.DEFINE_string('output_dir', '../../outputs/', 'all outputs model, logs etc.. path')
+flags.DEFINE_string('output_dir', '../../outputs/', 'path where all outputs i.e.. model, logs etc.. stored')
 
 """
 class derived from keras.utils.Sequence class, so that the data will be processed sequentially
@@ -78,7 +78,6 @@ class custom_generator(tf.keras.utils.Sequence):
 class fixedImageDataGenerator(tf.keras.preprocessing.image.ImageDataGenerator):
     def standardize(self, x):
         width, height, channel_axis = x.shape
-        print(x.shape[channel_axis-1])
         if self.featurewise_center:
             self.mean = np.mean(x, axis=(0, self.row_axis, self.col_axis))
             broadcast_shape = [1, 1, 1]
@@ -91,7 +90,7 @@ class dataGenerator:
         self.img_width = 224
         self.img_height = 224
         self.img_channels = 3
-        self.nb_epochs = 1000
+        self.nb_epochs = 5
         self.nb_batch_size = 32
         self.train_data_dir = train_data_dir
         self.valid_data_dir = valid_data_dir
@@ -106,16 +105,15 @@ class dataGenerator:
     """
     def feed_data_train_fit_transform(ae):
 
-        train_datagen_samples = ImageDataGenerator()
-        valid_datagen_samples = ImageDataGenerator()
+        train_datagen_samples = tf.keras.preprocessing.image.ImageDataGenerator()
+        valid_datagen_samples = tf.keras.preprocessing.image.ImageDataGenerator()
 
         train_generator_samples = train_datagen_samples.flow_from_directory(train_data_dir, target_size=(img_width, img_height),
                                                                         batch_size=nb_batch_size, class_mode="input", shuffle=True)
         valid_generator_samples = valid_datagen_samples.flow_from_directory(valid_data_dir, target_size=(img_width, img_height),
                                                                         batch_size=nb_batch_size, class_mode="input", shuffle=True)
 
-        # train samples
-        print("##### training samples #####")
+        #train samples
         fit_train_samples = np.array([])
         fit_train_samples.resize((0, img_width, img_height, 3))
         for i in range(int(train_generator_samples.samples/nb_batch_size)):
@@ -129,10 +127,8 @@ class dataGenerator:
             np.vstack((fit_train_samples, imgs))
 
         #validation samples
-        print("##### validation samples #####")
         fit_valid_samples = np.array([])
         fit_valid_samples.resize((0, img_width, img_height, 3))
-        print(valid_generator_samples.samples)
         for i in range(int(valid_generator_samples.samples/nb_batch_size)):
             imgs, labels = next(valid_generator_samples)
             idx = np.random.choice(imgs.shape[0], nb_batch_size, replace=False)
@@ -141,18 +137,15 @@ class dataGenerator:
         if valid_generator_samples.samples % nb_batch_size != 0:
             imgs, labels = next(valid_generator_samples)
             idx = np.random.choice(imgs.shape[0], imgs.shape[0], replace=False)
-            print("index", imgs[idx].shape)
             np.vstack((fit_valid_samples, imgs[idx]))
 
         shift = 0.2
-        train_datagen = ImageDataGenerator(rescale=1./255, featurewise_center=True, featurewise_std_normalization=True, zca_whitening=False,
+        train_datagen = tf.keras.preprocessing.image.ImageDataGenerator(rescale=1./255, featurewise_center=True, featurewise_std_normalization=True, zca_whitening=False,
                                        rotation_range=90, width_shift_range=shift, height_shift_range=shift, horizontal_flip=True, vertical_flip=True)
-        valid_datagen = ImageDataGenerator(rescale=1./255, featurewise_center=True, featurewise_std_normalization=False, zca_whitening=False,
+        valid_datagen = tf.keras.preprocessing.ImageDataGenerator(rescale=1./255, featurewise_center=True, featurewise_std_normalization=False, zca_whitening=False,
                                        rotation_range=90,width_shift_range=shift, height_shift_range=shift, horizontal_flip=True, vertical_flip=True)
 
         train_datagen.fit(fit_train_samples)
-        #print(type(fit_valid_samples))
-        #display_images(fit_valid_samples)
         valid_datagen.fit(fit_valid_samples)
 
         train_generator = train_datagen.flow_from_directory(train_data_dir, target_size=(img_width, img_height), batch_size=nb_batch_size, class_mode="input",
@@ -160,15 +153,14 @@ class dataGenerator:
         valid_generator = valid_datagen.flow_from_directory(valid_data_dir, target_size=(img_width, img_height), batch_size=nb_batch_size, class_mode="input",
                                                         shuffle=True)
 
-        #ae.fit_generator(train_generator, steps_per_epoch=math.floor(nb_train_samples/nb_batch_size), epochs=nb_epoch,
-                     #validation_data=valid_generator, validation_steps=math.floor(nb_valid_samples/nb_batch_size), verbose = 1,
-                    #callbacks=[history_cnn, checkpoint_cnn])
-        ae.fit_generator(valid_generator, steps_per_epoch=math.floor(nb_valid_samples/nb_batch_size), epochs=nb_epoch)
+        train_samples = int(train_generator.n//self.batch_size)
+        valid_samples = int(valid_generator.n//self.batch_size)
+        ae.fit_generator(train_generator, steps_per_epoch = train_samples, validation_data=valid_generator, validation_steps = valid_samples, epochs=nb_epoch)
 
         ae.save("../model/ae_movie_data.h5")
         del ae
 
-    def feed_data_train_idg(self, ae):
+    def feed_data_train_idg(self, ae, arch_type):
         #add the data augmentation
         shift = 0.2
 
@@ -176,6 +168,7 @@ class dataGenerator:
                 horizontal_flip=True, vertical_flip=True)
         valid_datagen = tf.keras.preprocessing.image.ImageDataGenerator(rescale=1./255, shear_range=shift, zoom_range=shift, rotation_range=90, width_shift_range=shift, height_shift_range=shift, 
                 horizontal_flip=True, vertical_flip=True)
+
         train_generator = train_datagen.flow_from_directory(self.train_data_dir, target_size=(self.img_width, self.img_height), batch_size=self.nb_batch_size, class_mode="input")
         valid_generator = valid_datagen.flow_from_directory(self.valid_data_dir, target_size=(self.img_width, self.img_height), batch_size=self.nb_batch_size, class_mode="input")
 
@@ -184,7 +177,7 @@ class dataGenerator:
         train_samples = int(train_generator.n//self.nb_batch_size)
         valid_samples = int(valid_generator.n//self.nb_batch_size)
 
-        callbacks, curr_model_path = model_call_backs(FLAGS.output_dir, 'aecnn.h5')
+        callbacks, curr_model_path = model_call_backs(FLAGS.output_dir, arch_type+'_MD.h5')
 
         data = train_generator.next()
         #kmri.visualize_model(ae, data[0])
@@ -192,10 +185,10 @@ class dataGenerator:
         ae.fit_generator(train_generator,steps_per_epoch=train_samples,epochs=self.nb_epochs, validation_data=valid_generator, validation_steps=valid_samples, 
                 callbacks=callbacks, workers=32, use_multiprocessing=True)
 
-        final_model = os.path.join(curr_model_path, 'aecnn_MD_final.h5')
+        final_model = os.path.join(curr_model_path, arch_type+'_MD_final.h5')
         ae.save(final_model)
 
-    def feed_train_cdg(self, ae, train_filenames, valid_filenames):
+    def feed_train_cdg(self, ae, train_filenames, valid_filenames, arch_type):
         train_datagen = custom_generator(FLAGS.train_data_dir, train_filenames, self.nb_batch_size, self.img_width)
         valid_datagen = custom_generator(FLAGS.valid_data_dir, valid_filenames, self.nb_batch_size, self.img_width)
 		
@@ -204,48 +197,54 @@ class dataGenerator:
         nb_train_steps = int(train_datagen.n // self.nb_batch_size)
         nb_valid_steps = int(valid_datagen.n // self.nb_batch_size)
 
-        callbacks, curr_model_path = model_call_backs(FLAGS.output_dir, 'aecnn.h5')
+        callbacks, curr_model_path = model_call_backs(FLAGS.output_dir, arch_type+'_MD.h5')
 
         ae.fit_generator(generator=train_datagen, steps_per_epoch=nb_train_steps, epochs=self.nb_epochs, validation_data=valid_datagen, validation_steps = nb_valid_steps,
 		callbacks=callbacks, workers=32, use_multiprocessing=True)
 
-        final_model = os.path.join(curr_model_path, 'aeCNN_final.h5')
+        final_model = os.path.join(curr_model_path, arch_type+'_MD_final.h5')
         ae.save(final_model)
 
-def train(train_data_dir, valid_data_dir, train_cdg):
+def train(train_data_dir, valid_data_dir, train_cdg, arch_type):
 
     dg = dataGenerator(train_data_dir, valid_data_dir)
 
     input_shape = (224, 224, 3)
 	
     """ autoencoder with inception like architecture """
-    #ae_model = inceptionAutoencoder(input_shape).autoencoder
-    #print(ae_model.summary())
+    if arch_type == 'CNN_INC_AE':
+        ae_model = inceptionAutoencoder(input_shape).autoencoder
 
     """ autoencoder with vgg16 like architecture by providing pre-trained weights """
-    #model_path = '/mnt/disks/slow1/video_processing/exp/AE_arch/model/vgg16_model/vgg16_weights_notop.h5'
-    #ae_model = VGG16AutoEncoder(input_shape, model_path, 5).auto_encoder
-    #print(ae_model.summary())
+    if arch_type == 'CNN_VGG_AE':
+        model_path = '/mnt/data/Veeru_backup/gcp_backup/pre_trained_models/vgg16_weights_notop.h5'
+        ae_model = VGG16AutoEncoder(input_shape, model_path, 5).auto_encoder
 
     """ Convolutional autoencoder architecture """
-    is_deeper = False
-    if is_deeper:
-        ae_model = ConvAutoEncoder(input_shape).autoencoder
-    else:
-        ae_model = ConvAutoEncoder(input_shape).ae_4layers()
+    if arch_type == 'CNN_AE':
+        is_deeper = True
+        if is_deeper: 
+            ae_model = ConvAutoEncoder(input_shape, is_deeper).autoencoder
+        else:
+            ae_model = ConvAutoEncoder(input_shape).ae_4layers()
+
+    if arch_type == 'CNN_UNET_AE':
+        ae_model = UnetAutoEncoder(input_shape).inference_UNET_1()
+
     print(ae_model.summary())
 
     if train_cdg == True: # use custom generator
         train_filenames = os.listdir(train_data_dir+'frames/')
         valid_filenames = os.listdir(valid_data_dir+'frames/')
-        dg.feed_train_cdg(ae_model, train_filenames, valid_filenames)
+        dg.feed_train_cdg(ae_model, train_filenames, valid_filenames, arch_type)
 
     else: # use keras ImageDataGenerator
-        dg.feed_data_train_idg(ae_model)
+        dg.feed_data_train_idg(ae_model, arch_type)
 
 def main():
     train_cdg = False #Enable custom generator
-    train(FLAGS.train_data_dir, FLAGS.valid_data_dir, train_cdg)	
+    arch_type = 'CNN_UNET_AE'
+    train(FLAGS.train_data_dir, FLAGS.valid_data_dir, train_cdg, arch_type)	
 
 if __name__ == "__main__":
     main()

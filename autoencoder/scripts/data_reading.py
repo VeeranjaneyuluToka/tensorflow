@@ -1,6 +1,7 @@
 import os
 import numpy as np
-import cv2 as cv`
+import cv2 as cv
+import random
 
 """
 Movie data experimentation
@@ -12,7 +13,8 @@ class data_reading(object):
     """ Read image and resize it using opencv-python """
     def get_img(self, path):
         img = cv.imread(path)
-        resized_img = cv.resize(img, (128, 128))
+        rgb_img = cv.cvtColor(img, cv.COLOR_BGR2RGB);
+        resized_img = cv.resize(rgb_img, (128, 128))
 
         return resized_img
 
@@ -52,7 +54,12 @@ class data_reading(object):
 
         return x_test
 
-    """ load train and test data in the form of numpy arrays and normalize them, so that the range is in between (0, 1) """
+    """
+    load train and test data in the form of numpy arrays and normalize them, so that the range is in between (0, 1)
+    paths should be two level up from images
+    @training_data_path: path where training data presents
+    @testing_data_path: path where testing data presents
+    """
     def create_data_numpy_arrays(self, training_data_path, testing_data_path):
 
         #load training data
@@ -72,7 +79,11 @@ class data_reading(object):
 
         return img_size, x_train, x_test
 
-    """ separate test data from entire data """
+    """ 
+    separate test data from entire data
+    @src_path: path where all the data presents
+    @dst_path: path where test data needs to be copied from src_path
+    """
     def create_test_data_randomly(self, src_path, dst_path):
 
         file_names = []
@@ -90,22 +101,27 @@ class data_reading(object):
             fdst_path = dst_path+fname
             shutil.move(src_path, fdst_path) #move file to test folder
 
+    """
+    generate batches of data given data directory and batch size
+    @directory: path where data presents
+    @batch_size: batch-size
+    """
     def generate_data(directory, batch_size):
         i = 0
         file_list = os.listdir(directory)
         while True:
             img_batch = []
-            for b in range(batch_size):
+            for _ in range(batch_size):
                 if i == len(file_list):
                     i = 0
                     random.shuffle(file_list)
                 sample = directory+file_list[i]
                 i += 1
-                #print("file path *****",sample)
-                image = cv2.resize(cv2.imread(sample), (128, 128))
-                if image is None:
-                    print("image is none *******")
-                img_batch.append((image.astype(float)-128)/128)
+                img = cv.imread(sample)
+                if img is None:
+                    continue
+                res_img = cv.resize(img, (128, 128))
+                img_batch.append((res_img.astype(float)-128)/128)
             yield np.array(img_batch)
 
     """
@@ -115,7 +131,6 @@ class data_reading(object):
         channel_axis = 3
         row_axis = 1
         col_axis = 2
-        print(x.shape)
         featurewise_center = True
         featurewise_std_normalization=True
         if featurewise_center:
@@ -125,20 +140,21 @@ class data_reading(object):
             mean = np.reshape(mean, broadcast_shape)
             x -= mean
 
-    #split the data (given a dataset) as training and validation (80 and 20)
-    def split_data_train_valid(path):
+    """
+    split the data (given a dataset) as training and validation (80 and 20)
+    @path: where all data presents
+    @train_data_path: path where training data needs to be copied
+    @valid_data_path: path where validation data needs to be copied
+    """
+    def split_data_train_valid(path, train_data_path, valid_data_path):
         no_of_files = len(os.listdir(path))
         valid_data_size = int(no_of_files * 0.2)
         train_data_size = no_of_files - valid_data_size
-        #print(train_data_size, valid_data_size)
 
         file_names = []
         for fname in os.listdir(path):
             comp_file_path = path + fname
             file_names.append(comp_file_path)
-
-        valid_data_path = '/mnt/disks/slow1/video_processing/exp/AE_arch/data/movie_data/bbs_frd_sv/valid/frames/'
-        train_data_path = '/mnt/disks/slow1/video_processing/exp/AE_arch/data/movie_data/bbs_frd_sv/train/frames/'
 
         #move all the validation files to respective folder
         for i in range(valid_data_size):
@@ -155,7 +171,10 @@ class data_reading(object):
             fdst_path = train_data_path+fname
             shutil.move(src_path, fdst_path)
 
-    #count no.of files present in a given path
+    """
+    count no.of files present in a given path
+    @path:path should be two level up from files 
+    """
     def check_complete_data_size(path):
         count = 0
         for seg_fold in os.listdir(path):
@@ -166,13 +185,18 @@ class data_reading(object):
                     if fname == 'imagecluster':
                         continue
                     count += 1
-        print('total no.of images:',count)
 
-    def generate_unique_data(path):
+        return count
+
+    """
+    remove duplicates based on some observations from the each FPS frames
+    @path: path where files presents
+    @dst_path: path where unique data should be copied
+    """
+    def generate_unique_data(path, dst_path):
         global count
         no_of_files = len(os.listdir(path))
         file_names = []
-        dst_path = '/mnt/disks/slow1/video_processing/frames/final_unique_data/'
 
         for fname in os.listdir(path):
             comp_file_path = path + '/' + fname
@@ -220,7 +244,10 @@ class data_reading(object):
         shutil.copy(src_file_name, dst_path_fname)
 
 
-    #parse all the clusters of data and create unique data set
+    """
+    parse all the clusters of data and create unique data set
+    @path: clusters path
+    """
     def create_train_valid_from_clusters(path):
         for seg_fold in os.listdir(path):
             seg_path = path + seg_fold
@@ -232,33 +259,37 @@ class data_reading(object):
                         final_cluster_path = clusters_path + '/' + cluster_fold
                         generate_unique_data(final_cluster_path)
 
-    #check if image is valid using opencv
-    def check_if_image_is_valid():
+    """
+    check if image is valid using opencv
+    @path: path where all images present
+    """
+    def is_image_valid(path):
         for fname in os.listdir(path):
             comp_path = path+fname
-            #print(comp_path)
             img = cv2.imread(comp_path)
             if img is None:
-                print(comp_path)
+                print("img is not valid",comp_path)
                 continue
 
-    # tried spliting whole dataset as two halfs
-    def split_data_set(path):
+    """
+    tried spliting whole dataset as two halfs
+    @path:original dataset path
+    @dst_path_1: where first half dataset should be copied
+    @dst_path_2: where second harlf should be copied
+    """
+    def split_data_set(path, dst_path_1, dst_path_2):
         file_names = []
 
         for fname in os.listdir(path):
             com_fname = path + fname
             file_names.append(com_fname)
 
-        print(len(file_names))
         sorted(file_names)
-        new_path_1 = '/mnt/disks/slow1/video_processing/frames/breaking_bad_s01e07_1/'
-        if not os.path.exists(new_path_1):
-            os.makedirs(new_path_1)
+        if not os.path.exists(dst_path_1):
+            os.makedirs(dst_path_1)
 
-        new_path_2 = '/mnt/disks/slow1/video_processing/frames/breaking_bad_s01e07_2/'
-        if not os.path.exists(new_path_2):
-            os.makedirs(new_path_2)
+        if not os.path.exists(dst_path_2):
+            os.makedirs(dst_path_2)
 
         end_ind = len(file_names)
         count = 0
@@ -268,21 +299,21 @@ class data_reading(object):
             head, tail = os.path.split(fname)
 
             if count < mid_ind:
-                dst_path = new_path_1 + tail
+                dst_path = dst_path_1 + tail
             else:
-                dst_path = new_path_2 + tail
+                dst_path = dst_path_2 + tail
 
             shutil.copy(fname, dst_path)
             count += 1
 
-    """ copy file from src to dst path and rename file which is in dst path """
+    """ 
+    copy file from src to dst path and rename file which is in dst path
+    """
     def copy_files(src_path, dst_path, rename_file_path):
         shutil.copy(src_path, dst_path)
         os.rename(dst_path, rename_file_path)
 
-    def get_all_data_in_folder():
-        path = '../../../frames/'
-        dst_path = "../data/movie_data/train_bbs/frames/"
+    def get_all_data_in_folder(path, dst_path):
         if not os.path.exists(dst_path):
             os.makedirs(dst_path)
 
@@ -297,28 +328,11 @@ class data_reading(object):
                 copy_files(src_file_path, dst_file_path, rename_file_path)
                 count += 1
 
-
-    """ create test data randomly picking up files """
-    def create_test_data_randomly():
-        file_names_list = []
-
-        for fname in os.listdir(src_path):
-                file_path = src_path+fname
-                file_names_list.append(file_path)
-
-        no_of_test_files = 5000
-        for i in range(no_of_test_files):
-                ind = random.randint(0, len(file_names_list)-1)
-                src_path = file_names_list[ind]
-                file_names_list.pop(ind)
-                fdir, fname = os.path.split(src_path)
-                fdst_path = dst_path+fname
-                shutil.move(src_path, fdst_path)
-
-
-    """ to make predict_gen work, changed the path of original frames path """
-    def create_new_folder_structure_predict_gen():
-        parent_path = "/mnt/disks/slow1/video_processing/small_video_clip_frames_keras/small_video_clip_frames/"
+    """ 
+    to make predict_gen work, changed the path of original frames path
+    @parent_path: where titls presents
+    """
+    def create_new_folder_structure_predict_gen(parent_path):
         for sub_path in os.listdir(parent_path):
             sub_sub_path = parent_path + sub_path
             for fin_path in os.listdir(sub_sub_path):
@@ -334,9 +348,11 @@ class data_reading(object):
                     dst_file_path = new_dst_path + '/' + f_name
                     shutil.move(file_path, dst_file_path)
 
-    """ suppose to remove older feature vectors folder """
-    def remove_folders():
-        parent_path = "/mnt/disks/slow1/video_processing/small_video_clip_frames_keras/small_video_clip_frames/"
+    """
+    suppose to remove older feature vectors folder
+    @path of titles
+    """
+    def remove_folders(parent_path):
         for sub_path in os.listdir(parent_path):
             comp_path_so_far = parent_path + sub_path
             for sub_sub_path in os.listdir(comp_path_so_far):
@@ -345,7 +361,10 @@ class data_reading(object):
                     if fname == 'feature_vectors_plf' or fname == 'feature_vectors' or fname == 'scalars':
                         fin_comp_path = final_sub_path+'/'+'frames'+'/'+fname
 
-    """ remove .json files which are in segmented folders to create clusters """
+    """
+    remove non-jpg files which are in segmented folders to create clusters
+    @path: path should be two levels up from the files
+    """
     def remove_unnecessary_files(path):
         for sub_fold in os.listdir(path):
             sub_fold_path = path+sub_fold
@@ -357,7 +376,9 @@ class data_reading(object):
                     if ext != 'jpg':
                         os.remove(comp_path)
 
-    """ Generator to yield inputs and their labels in batches."""
+    """ 
+    Generator to yield inputs and their labels in batches.
+    """
     def data_gen(top_dim):
         batch_size = 32
         while True:
@@ -377,5 +398,15 @@ class data_reading(object):
             
             np_batch_imgs = np.array(batch_imgs)
             np_labels = (np.array(batch_labels))
-            print(np_batch_imgs.shape, np_labels.shape)
             yield (np_batch_imgs, np_labels)
+
+    def rename_folder_name(src_path):
+        for p_fold_name in os.listdir(src_path):
+            sub_fold_path = os.path.join(src_path, p_fold_name)
+            for s_fold_name in os.listdir(sub_fold_path):
+                sub_sub_fold_path = os.path.join(sub_fold_path, s_fold_name)
+                for f_fold in os.listdir(sub_sub_fold_path):
+                    if f_fold == 'feature_vectors_cnn6l_3136':
+                        dst_path = os.path.join(sub_sub_fold_path, 'feature_vectors_cnn6l_3136')
+                        comp_path = os.path.join(sub_sub_fold_path, f_fold)
+                        shutil.move(comp_path, dst_path)
