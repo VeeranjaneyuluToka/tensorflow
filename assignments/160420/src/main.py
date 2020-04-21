@@ -16,7 +16,7 @@ flags.DEFINE_string("images_path", '../data/images', "images path")
 
 flags.DEFINE_string('file_path', '', 'give file path if it is prediction')
 
-np.set_printoptions(formatter={'float_kind':'{:f}'.format})
+np.set_printoptions(formatter={'float_kind':'{:f}'.format}) # to display the prediction in non-scientific values
 
 def train():
     dp_obj = data_pipeline()

@@ -13,7 +13,7 @@ read data raw entries from csv, create classes path and copy the data into diffe
 @src_data_path: path where all the images present
 @classes_data_path: gets created with different classes in it
 
-Createa a path "../data/classes/"
+Createa a path "../data/classes/XXX" where XXX are class names
 """
 def read_csv_file(csv_file_path, src_data_path):
     """ path where it splits data as classes based on labels and store the images in different classes """
@@ -93,7 +93,7 @@ def load_test_data(path):
 
             file_path = os.path.join(clas_path, file)
             img = cv.imread(file_path, 0)
-            img = img*(1./255) #apply normalize that is applied in training
+            img = img*(1./255) #apply normalization step that is applied in training
             ex_img = np.expand_dims(img, axis=-1)
             test_data.append([np.array(ex_img), label])
 
