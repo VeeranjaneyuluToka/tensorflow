@@ -2,13 +2,15 @@ import setGPU
 
 import tensorflow as tf
 
+from kerastuner.tuners import (BayesianOptimization, Hyperband, RandomSearch)
+
 from autoencoder_architectures import *
 
 import os
 import cv2 as cv
 import math
 import numpy as np
-
+from pathlib import Path
 from common import *
 
 flags = tf.app.flags
@@ -28,13 +30,8 @@ class custom_generator(tf.keras.utils.Sequence):
         self.batch_size = batch_size
         self.image_size = image_size
 
-        """ Initialize the Keras ImageDataGenerator to augment the data """
-        self.datagen = tf.keras.preprocessing.image.ImageDataGenerator(rescale=1./255, featurewise_center=True, featurewise_std_normalization=True, zca_whitening=False, 
-                rotation_range=90, width_shift_range=0.2, height_shift_range=0.2, horizontal_flip=True, vertical_flip=True)
-
     def __load__(self, filename):
-        img_path = os.path.join(self.folder, filename)
-        image = cv.imread(img_path)
+        image = cv.imread(filename)
         res_image = cv.resize(image, (self.image_size, self.image_size))
         res_image = res_image / 255.
         return res_image
@@ -49,8 +46,9 @@ class custom_generator(tf.keras.utils.Sequence):
         """
         call ImageDataGenerator fit() method on each batch image to get statistics of batch
         """
-        self.datagen.fit(image)
+        #self.datagen.fit(image)
         #self.datagen.standardize(image)
+        pass
     
     def __getitem__(self, idx):
         if (idx+1)*self.batch_size > len(self.image_filenames):
@@ -64,7 +62,6 @@ class custom_generator(tf.keras.utils.Sequence):
             img_lst.append(tmp_img)
             
         train_image = np.array(img_lst)
-        #self.__normalize__(image)
 
         noise_factor = 0.3
         train_image_noisy = train_image + noise_factor*np.random.normal(loc=0.0, scale=1.0, size=train_image.shape)
@@ -86,14 +83,15 @@ class fixedImageDataGenerator(tf.keras.preprocessing.image.ImageDataGenerator):
             x -= self.mean
 
 class dataGenerator:
-    def __init__(self, train_data_dir, valid_data_dir):
+    def __init__(self):
         self.img_width = 224
         self.img_height = 224
         self.img_channels = 3
-        self.nb_epochs = 5
+        self.nb_epochs = 50
         self.nb_batch_size = 32
-        self.train_data_dir = train_data_dir
-        self.valid_data_dir = valid_data_dir
+        self.SEED = 1
+        self.MAX_TRIALS = 20
+        self.EXECUTION_PER_TRIAL = 2
 	
     def fixed_generator(self, generator):
         for batch in generator:
@@ -192,22 +190,33 @@ class dataGenerator:
         train_datagen = custom_generator(FLAGS.train_data_dir, train_filenames, self.nb_batch_size, self.img_width)
         valid_datagen = custom_generator(FLAGS.valid_data_dir, valid_filenames, self.nb_batch_size, self.img_width)
 		
-        ae.compile(optimizer=optimizers.Adam(0.01), loss = losses.mean_squared_error, metrics=['accuracy'])
+        #ae.compile(optimizer=tf.keras.optimizers.Adam(0.01), loss = tf.keras.losses.mean_squared_error, metrics=['accuracy'])
 
-        nb_train_steps = int(train_datagen.n // self.nb_batch_size)
-        nb_valid_steps = int(valid_datagen.n // self.nb_batch_size)
+        nb_train_steps = len(train_filenames) // self.nb_batch_size
+        nb_valid_steps = len(valid_filenames) // self.nb_batch_size
 
         callbacks, curr_model_path = model_call_backs(FLAGS.output_dir, arch_type+'_MD.h5')
 
-        ae.fit_generator(generator=train_datagen, steps_per_epoch=nb_train_steps, epochs=self.nb_epochs, validation_data=valid_datagen, validation_steps = nb_valid_steps,
-		callbacks=callbacks, workers=32, use_multiprocessing=True)
+        #ae.fit_generator(generator=train_datagen, steps_per_epoch=nb_train_steps, epochs=self.nb_epochs, validation_data=valid_datagen, validation_steps = nb_valid_steps,
+	#	callbacks=callbacks, workers=32, use_multiprocessing=True)
 
+        directory = Path("../../outputs/movie_data/")
+        project_name = 'cnn_htuning'
+        random_tuner = RandomSearch(ae, objective='val_acc', seed=self.SEED, max_trials=self.MAX_TRIALS, executions_per_trial=self.EXECUTION_PER_TRIAL,
+                                directory=f"{directory}_random_search", project_name=project_name)
+
+        random_tuner.search_space_summary()
+
+        random_tuner.search(train_datagen, steps_per_epoch=nb_train_steps, epochs=self.nb_epochs, callbacks=callbacks, validation_data=valid_datagen, 
+                validation_steps=nb_valid_steps, verbose=1, workers=32)
+
+        best_model = random_tuner.get_best_models(num_models=1)[0]
         final_model = os.path.join(curr_model_path, arch_type+'_MD_final.h5')
-        ae.save(final_model)
+        best_model.save(final_model)
 
-def train(train_data_dir, valid_data_dir, train_cdg, arch_type):
+def train(train_cdg, arch_type):
 
-    dg = dataGenerator(train_data_dir, valid_data_dir)
+    dg = dataGenerator()
 
     input_shape = (224, 224, 3)
 	
@@ -222,29 +231,41 @@ def train(train_data_dir, valid_data_dir, train_cdg, arch_type):
 
     """ Convolutional autoencoder architecture """
     if arch_type == 'CNN_AE':
-        is_deeper = True
+        is_deeper = False
         if is_deeper: 
             ae_model = ConvAutoEncoder(input_shape, is_deeper).autoencoder
         else:
-            ae_model = ConvAutoEncoder(input_shape).ae_4layers()
+            ae_model = ConvAutoEncoder(input_shape)
 
     if arch_type == 'CNN_UNET_AE':
         ae_model = UnetAutoEncoder(input_shape).inference_UNET_1()
 
-    print(ae_model.summary())
+    if train_cdg == True: # use custom generator from tf.keras.utils.Sequence
+        train_file_names = []
+        for title in os.listdir(FLAGS.train_data_dir):
+            title_path = os.path.join(FLAGS.train_data_dir, title)
+            file_names = os.listdir(title_path)
+            for fname in file_names:
+                file_path = os.path.join(title_path, fname)
+                train_file_names.append(file_path)
 
-    if train_cdg == True: # use custom generator
-        train_filenames = os.listdir(train_data_dir+'frames/')
-        valid_filenames = os.listdir(valid_data_dir+'frames/')
-        dg.feed_train_cdg(ae_model, train_filenames, valid_filenames, arch_type)
+        valid_file_names = []
+        for title in os.listdir(FLAGS.valid_data_dir):
+            title_path = os.path.join(FLAGS.valid_data_dir, title)
+            file_names = os.listdir(title_path)
+            for fname in file_names:
+                file_path = os.path.join(title_path, fname)
+                valid_file_names.append(file_path)
+
+        dg.feed_train_cdg(ae_model, train_file_names, valid_file_names, arch_type)
 
     else: # use keras ImageDataGenerator
         dg.feed_data_train_idg(ae_model, arch_type)
 
 def main():
-    train_cdg = False #Enable custom generator
-    arch_type = 'CNN_UNET_AE'
-    train(FLAGS.train_data_dir, FLAGS.valid_data_dir, train_cdg, arch_type)	
+    train_cdg = True #Enable custom generator
+    arch_type = 'CNN_AE'
+    train(train_cdg, arch_type)	
 
 if __name__ == "__main__":
     main()
