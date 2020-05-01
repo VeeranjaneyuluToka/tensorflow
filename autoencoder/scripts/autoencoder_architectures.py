@@ -1,32 +1,98 @@
-import setGPU
-
 import tensorflow as tf
 
 from kerastuner import HyperModel
 
+class dense_arch(object):
+    def __init__(self, input_shape, no_of_layers):
+        self.input_shape = input_shape
+        self.encoding_dim = [16, 32, 64, 128, 256, 512]
+        self.layers = no_of_layers
+
+    def undercomplete_ae_arch(self, latent_dim):
+
+        encoder = tf.keras.models.Sequential([tf.keras.layers.Dense(latent_dim, input_shape=[self.input_shape])])
+        decoder = tf.keras.models.Sequential([tf.keras.layers.Dense(self.input_shape, input_shape=[latent_dim])])
+
+        autoencoder = tf.keras.models.Sequential([encoder, decoder])
+
+        autoencoder.compile(loss='mse', optimizer=tf.keras.optimizers.SGD(lr=1.5), metrics=['acc'])
+
+        return autoencoder
+
+    def dense_network(self):
+        input_img = tf.keras.layers.Input(shape=(784,))
+
+        x = tf.keras.layers.Dense(self.encoding_dim[0], activation='relu')(input_img)
+
+        #for i in range(self.layers):
+        #    x = tf.keras.layers.Dense(self.encoding_dim[i], activation='relu')(x)
+
+        y = tf.keras.layers.Dense(self.input_shape, activation='relu')(x)
+
+        #for i in range(self.layers, 0, 1):
+        #    y = tf.keras.layers.Dense(self.encoding_dim[i], activation='relu')(x)
+
+        ae = tf.keras.models.Model(input_img, y)
+        encoder = tf.keras.models.Model(input_img, x)
+
+        #encoded_input = tf.keras.layers.Input(shape=(self.encoding_dim[self.layers], ))
+        #decoder_layer = ae.layers[-1]
+        #decoder = tf.keras.models.Model(encoded_input, decoder_layer(encoded_input))
+
+        ae.compile(optimizer='adadelta', loss='binary_crossentropy', metrics=['acc'])
+
+        return ae, encoder
+
+    def three_layer_dense_net(self):
+        input_img = tf.keras.layers.Input(shape=(784,))
+
+        encoded = tf.keras.layers.Dense(256, activation='relu')(input_img)
+        encoded = tf.keras.layers.Dense(128, activation='relu')(encoded)
+        encoded = tf.keras.layers.Dense(64, activation='relu')(encoded)
+        encoded = tf.keras.layers.Dense(32, activation='relu')(encoded)
+        encoder = tf.keras.models.Model(input_img, encoded)
+
+        decoded = tf.keras.layers.Dense(64, activation='relu')(encoded)
+        decoded = tf.keras.layers.Dense(128, activation='relu')(decoded)
+        decoded = tf.keras.layers.Dense(256, activation='relu')(decoded)
+        decoded = tf.keras.layers.Dense(784, activation='sigmoid')(decoded)
+
+        ae = tf.keras.models.Model(input_img, decoded)
+
+        encoder_input = tf.keras.layers.Input(shape=(self.encoding_dim[1], ))
+        decoder_layer = ae.layers[0]
+        decoder = tf.keras.models.Model(encoder_input, decoder_layer(encoder_input))
+
+        ae.compile(optimizer='adadelta', loss='binary_crossentropy', metrics=['acc'])
+
+        return ae, encoder
+
 class ConvAutoEncoder(HyperModel):
     def __init__(self, input_shape, is_deeper=False):
         self.input_shape = input_shape
-        self.input_img = tf.keras.layers.Input(shape=self.input_shape, name='encoder_input')
-
         self.is_deeper = is_deeper
+        """
+        if is_deeper == True:
+            encoder, input_img = self.encoder()
+            decoder = self.decoder(encoder)
+            self.autoencoder = tf.keras.models.Model(input_img, decoder)"""
 
     def build(self, hp):
         if self.is_deeper:
-            encoder = self.encoder(self.input_img, hp)
+            encoder, input_img = self.encoder(hp)
             decoder = self.decoder(encoder, hp)
-            autoencoder = tf.keras.models.Model(self.input_img, decoder)
+            autoencoder = tf.keras.models.Model(input_img, decoder)
         else:
             autoencoder = self.ae_4layers(hp)
 
         autoencoder.compile(optimizer=tf.keras.optimizers.Adam(hp.Float("learning_rate", min_value=1e-4, max_value=1e-2, sampling='LOG', default=1e-3)), 
             loss = tf.keras.losses.mean_squared_error, metrics=['accuracy'])
-        #autoencoder.compile(optimizer=tf.keras.optimizers.Adam(0.001), loss=tf.keras.losses.mean_squared_error, metrics=['acc'])
 
         return autoencoder
 
     """ encoder """
-    def encoder(self, input_img, hp):
+    def encoder(self, hp):
+        input_img = tf.keras.layers.Input(shape=self.input_shape, name='encoder_input')
 
         conv1 = tf.keras.layers.Conv2D(32, (3, 3), activation='relu', padding='same')(input_img) #224 x 224 x 32
         conv1 = tf.keras.layers.BatchNormalization()(conv1)
@@ -64,7 +130,7 @@ class ConvAutoEncoder(HyperModel):
 
         dense = tf.keras.layers.Dense(16, activation='relu', name='encoder')(conv6)
 
-        return dense
+        return dense, input_img
 
     """ decoder """
     def decoder(self, dense, hp):
@@ -123,36 +189,28 @@ class ConvAutoEncoder(HyperModel):
         input_img = tf.keras.layers.Input(shape=self.input_shape, name='input')
 
         x = tf.keras.layers.Conv2D(hp.Choice("num_filters", values=[32, 64], default=32,), (3, 3), activation='relu', padding='same')(input_img)
-        #x = tf.keras.layers.Conv2D(32, (3, 3), activation='relu', padding='same')(input_img)
         x = tf.keras.layers.MaxPooling2D((2, 2), padding='same')(x)
 
         x = tf.keras.layers.Conv2D(hp.Choice("num_filters", values=[16, 32], default=16,), (3, 3), activation='relu', padding='same')(x)
-        #x = tf.keras.layers.Conv2D(16, (3, 3), activation='relu', padding='same')(x)
         x = tf.keras.layers.MaxPooling2D((2, 2), padding='same')(x)
 
         x = tf.keras.layers.Conv2D(hp.Choice("num_filters", values=[16, 32], default=16,), (3, 3), activation='relu', padding='same')(x)
-        #x = tf.keras.layers.Conv2D(16, (3, 3), activation='relu', padding='same')(x)
         x = tf.keras.layers.MaxPooling2D((2, 2), padding='same')(x)
 
         x = tf.keras.layers.Conv2D(hp.Choice("num_filters", values=[8, 16], default=8,), (3, 3), activation='relu', padding='same')(x)
-        #x = tf.keras.layers.Conv2D(8, (3, 3), activation='relu', padding='same')(x)
         encoded = tf.keras.layers.MaxPooling2D((2, 2), padding='same', name='encoder')(x)
 
         """ Decoder layers """
         x = tf.keras.layers.Conv2D(hp.Choice("num_filters", values=[8, 16], default=8,), (3, 3), activation='relu', padding='same')(encoded)
-        #x = tf.keras.layers.Conv2D(8, (3, 3), activation='relu', padding='same')(encoded)
         x = tf.keras.layers.UpSampling2D((2, 2))(x)
 
         x = tf.keras.layers.Conv2D(hp.Choice("num_filters", values=[16, 32], default=16,), (3, 3), activation='relu', padding='same')(x)
-        #x = tf.keras.layers.Conv2D(16, (3, 3), activation='relu', padding='same')(x)
         x = tf.keras.layers.UpSampling2D((2, 2))(x)
 
         x = tf.keras.layers.Conv2D(hp.Choice("num_filters", values=[16, 32], default=16,), (3, 3), activation='relu', padding='same')(x)
-        #x = tf.keras.layers.Conv2D(16, (3, 3), activation='relu', padding='same')(x)
         x = tf.keras.layers.UpSampling2D((2, 2))(x)
 
         x = tf.keras.layers.Conv2D(hp.Choice("num_filters", values=[32, 64], default=32,), (3, 3), activation='relu', padding='same')(x)
-        #x = tf.keras.layers.Conv2D(32, (3, 3), activation='relu', padding='same')(x)
         x = tf.keras.layers.UpSampling2D((2, 2))(x)
         decoded = tf.keras.layers.Conv2D(3, (3, 3), activation='sigmoid', padding='same')(x)
 

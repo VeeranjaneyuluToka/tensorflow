@@ -113,15 +113,15 @@ class custom_datasets(object):
     @batch_size: batch-size
     """
     def generate_data(self, directory, batch_size):
-        #i = 0
+        i = 0
         file_list = os.listdir(directory)
 
         while True:
             img_batch = []
             for _ in range(batch_size):
-                #if i == len(file_list):
-                #    i = 0
-                #    random.shuffle(file_list)
+                if i == len(file_list):
+                    i = 0
+                    random.shuffle(file_list)
 
                 file_path = os.path.join(directory, file_list[i])
                 i += 1
@@ -422,17 +422,18 @@ class custom_datasets(object):
 Image public datasets available in the tensorflow to experiment custom architectures initially
 """
 class public_datasets(object):
-    def __init__(self):
-        pass
+    def __init__(self, is_reshape=True):
+        self.is_reshape = is_reshape
 
     def load_mnist(self):
         (x_train, y_train), (x_test, y_test) = tf.keras.datasets.mnist.load_data()
 
         x_train = x_train.astype('float32') / 255.0
         x_test = x_test.astype('float32') / 255.0
-
-        x_train = x_train.reshape(x_train.shape[0], np.prod(x_train.shape[1:]))
-        x_test = x_test.reshape(x_test.shape[0], np.prod(x_test.shape[1:]))
+        
+        if self.is_reshape:
+            x_train = x_train.reshape(x_train.shape[0], np.prod(x_train.shape[1:]))
+            x_test = x_test.reshape(x_test.shape[0], np.prod(x_test.shape[1:]))
 
         return x_train, y_train, x_test, y_test
 
@@ -446,8 +447,9 @@ class public_datasets(object):
         x_train = x_train.astype('float32') / 255.0
         x_test = x_test.astype('float32') / 255.0
 
-        x_train = x_train.reshape(x_train.shape[0], np.prod(x_train.shape[1:]))
-        x_test = x_test.reshape(x_test.shape[0], np.prod(x_test.shape[1:]))
+        if self.is_reshape:
+            x_train = x_train.reshape(x_train.shape[0], np.prod(x_train.shape[1:]))
+            x_test = x_test.reshape(x_test.shape[0], np.prod(x_test.shape[1:]))
 
         return x_train, y_train, x_test, y_test
 
@@ -457,8 +459,9 @@ class public_datasets(object):
         x_train = x_train.astype('float32') / 255.0
         x_test = x_test.astype('float32') / 255.0
 
-        x_train = x_train.reshape(x_train.shape[0], np.prod(x_train.shape[1:]))
-        x_test = x_test.reshape(x_test.shape[0], np.prod(x_test.shape[1:]))
+        if self.is_reshape:
+            x_train = x_train.reshape(x_train.shape[0], np.prod(x_train.shape[1:]))
+            x_test = x_test.reshape(x_test.shape[0], np.prod(x_test.shape[1:]))
 
         return x_train, y_train, x_test, y_test
         

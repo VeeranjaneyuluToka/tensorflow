@@ -87,7 +87,7 @@ class dataGenerator:
         self.img_width = 224
         self.img_height = 224
         self.img_channels = 3
-        self.nb_epochs = 50
+        self.nb_epochs = 100
         self.nb_batch_size = 32
         self.SEED = 1
         self.MAX_TRIALS = 20
@@ -167,8 +167,8 @@ class dataGenerator:
         valid_datagen = tf.keras.preprocessing.image.ImageDataGenerator(rescale=1./255, shear_range=shift, zoom_range=shift, rotation_range=90, width_shift_range=shift, height_shift_range=shift, 
                 horizontal_flip=True, vertical_flip=True)
 
-        train_generator = train_datagen.flow_from_directory(self.train_data_dir, target_size=(self.img_width, self.img_height), batch_size=self.nb_batch_size, class_mode="input")
-        valid_generator = valid_datagen.flow_from_directory(self.valid_data_dir, target_size=(self.img_width, self.img_height), batch_size=self.nb_batch_size, class_mode="input")
+        train_generator = train_datagen.flow_from_directory(FLAGS.train_data_dir, target_size=(self.img_width, self.img_height), batch_size=self.nb_batch_size, class_mode="input")
+        valid_generator = valid_datagen.flow_from_directory(FLAGS.valid_data_dir, target_size=(self.img_width, self.img_height), batch_size=self.nb_batch_size, class_mode="input")
 
         ae.compile(optimizer=tf.keras.optimizers.Adam(0.001), loss = tf.keras.losses.mean_squared_error, metrics=['acc'])
 
@@ -178,7 +178,6 @@ class dataGenerator:
         callbacks, curr_model_path = model_call_backs(FLAGS.output_dir, arch_type+'_MD.h5')
 
         data = train_generator.next()
-        #kmri.visualize_model(ae, data[0])
 
         ae.fit_generator(train_generator,steps_per_epoch=train_samples,epochs=self.nb_epochs, validation_data=valid_generator, validation_steps=valid_samples, 
                 callbacks=callbacks, workers=32, use_multiprocessing=True)
@@ -190,15 +189,10 @@ class dataGenerator:
         train_datagen = custom_generator(FLAGS.train_data_dir, train_filenames, self.nb_batch_size, self.img_width)
         valid_datagen = custom_generator(FLAGS.valid_data_dir, valid_filenames, self.nb_batch_size, self.img_width)
 		
-        #ae.compile(optimizer=tf.keras.optimizers.Adam(0.01), loss = tf.keras.losses.mean_squared_error, metrics=['accuracy'])
-
         nb_train_steps = len(train_filenames) // self.nb_batch_size
         nb_valid_steps = len(valid_filenames) // self.nb_batch_size
 
         callbacks, curr_model_path = model_call_backs(FLAGS.output_dir, arch_type+'_MD.h5')
-
-        #ae.fit_generator(generator=train_datagen, steps_per_epoch=nb_train_steps, epochs=self.nb_epochs, validation_data=valid_datagen, validation_steps = nb_valid_steps,
-	#	callbacks=callbacks, workers=32, use_multiprocessing=True)
 
         directory = Path("../../outputs/movie_data/")
         project_name = 'cnn_htuning'
@@ -231,14 +225,17 @@ def train(train_cdg, arch_type):
 
     """ Convolutional autoencoder architecture """
     if arch_type == 'CNN_AE':
-        is_deeper = False
+        is_deeper = True
         if is_deeper: 
-            ae_model = ConvAutoEncoder(input_shape, is_deeper).autoencoder
+            #ae_model = ConvAutoEncoder(input_shape, is_deeper).autoencoder
+            ae_model = ConvAutoEncoder(input_shape, is_deeper)
         else:
             ae_model = ConvAutoEncoder(input_shape)
 
     if arch_type == 'CNN_UNET_AE':
         ae_model = UnetAutoEncoder(input_shape).inference_UNET_1()
+
+    #print(ae_model.summary())
 
     if train_cdg == True: # use custom generator from tf.keras.utils.Sequence
         train_file_names = []
