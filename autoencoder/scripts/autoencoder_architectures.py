@@ -2,68 +2,69 @@ import tensorflow as tf
 
 from kerastuner import HyperModel
 
-class dense_arch(object):
-    def __init__(self, input_shape, no_of_layers):
-        self.input_shape = input_shape
-        self.encoding_dim = [16, 32, 64, 128, 256, 512]
-        self.layers = no_of_layers
+class dense_archs(object):
 
-    def undercomplete_ae_arch(self, latent_dim):
+    def __init__(self, input_shape):
+        self.input_shape = input_shape
+        self.encoding_dim = [16, 32, 64, 128, 256]
+
+    def __rounded_accuracy(self, y_true, y_pred):
+        return tf.keras.metrics.binary_accuracy(tf.round(y_true), tf.round(y_pred))
+
+    def undercomp_ae_arch(self, latent_dim):
 
         encoder = tf.keras.models.Sequential([tf.keras.layers.Dense(latent_dim, input_shape=[self.input_shape])])
         decoder = tf.keras.models.Sequential([tf.keras.layers.Dense(self.input_shape, input_shape=[latent_dim])])
-
         autoencoder = tf.keras.models.Sequential([encoder, decoder])
 
         autoencoder.compile(loss='mse', optimizer=tf.keras.optimizers.SGD(lr=1.5), metrics=['acc'])
 
-        return autoencoder
+        return autoencoder, encoder
 
-    def dense_network(self):
-        input_img = tf.keras.layers.Input(shape=(784,))
+    def stacked_ae_arch(self):
 
-        x = tf.keras.layers.Dense(self.encoding_dim[0], activation='relu')(input_img)
+        stacked_encoder = tf.keras.models.Sequential([
+            tf.keras.layers.Flatten(input_shape=self.input_shape),
+            tf.keras.layers.Dense(self.encoding_dim[3], activation="selu"),
+            tf.keras.layers.Dense(self.encoding_dim[2], activation="selu"),
+        ])
 
-        #for i in range(self.layers):
-        #    x = tf.keras.layers.Dense(self.encoding_dim[i], activation='relu')(x)
+        stacked_decoder = tf.keras.models.Sequential([
+            tf.keras.layers.Dense(self.encoding_dim[3], activation="selu", input_shape=[self.encoding_dim[2]]),
+            tf.keras.layers.Dense(self.input_shape[0]*self.input_shape[1]*self.input_shape[2], activation="sigmoid"),
+            tf.keras.layers.Reshape(self.input_shape)
+        ])
+        stacked_ae = tf.keras.models.Sequential([stacked_encoder, stacked_decoder])
 
-        y = tf.keras.layers.Dense(self.input_shape, activation='relu')(x)
+        stacked_ae.compile(loss="binary_crossentropy", optimizer=tf.keras.optimizers.SGD(lr=1.5), metrics=[self.__rounded_accuracy])
 
-        #for i in range(self.layers, 0, 1):
-        #    y = tf.keras.layers.Dense(self.encoding_dim[i], activation='relu')(x)
+        return stacked_ae, stacked_encoder
 
-        ae = tf.keras.models.Model(input_img, y)
-        encoder = tf.keras.models.Model(input_img, x)
+    def deep_dense_net(self):
 
-        #encoded_input = tf.keras.layers.Input(shape=(self.encoding_dim[self.layers], ))
-        #decoder_layer = ae.layers[-1]
-        #decoder = tf.keras.models.Model(encoded_input, decoder_layer(encoded_input))
+        input_img = tf.keras.layers.Input(shape=(self.input_shape))
+        flatten = tf.keras.layers.Flatten()(input_img)
 
-        ae.compile(optimizer='adadelta', loss='binary_crossentropy', metrics=['acc'])
+        encoded = tf.keras.layers.Dense(self.encoding_dim[len(self.encoding_dim)-1], activation='relu')(flatten)
+        for ind in range(len(self.encoding_dim)-2, -1, -1):
+            encoded = tf.keras.layers.Dense(self.encoding_dim[ind], activation='relu')(encoded)
 
-        return ae, encoder
-
-    def three_layer_dense_net(self):
-        input_img = tf.keras.layers.Input(shape=(784,))
-
-        encoded = tf.keras.layers.Dense(256, activation='relu')(input_img)
-        encoded = tf.keras.layers.Dense(128, activation='relu')(encoded)
-        encoded = tf.keras.layers.Dense(64, activation='relu')(encoded)
-        encoded = tf.keras.layers.Dense(32, activation='relu')(encoded)
         encoder = tf.keras.models.Model(input_img, encoded)
 
-        decoded = tf.keras.layers.Dense(64, activation='relu')(encoded)
-        decoded = tf.keras.layers.Dense(128, activation='relu')(decoded)
-        decoded = tf.keras.layers.Dense(256, activation='relu')(decoded)
-        decoded = tf.keras.layers.Dense(784, activation='sigmoid')(decoded)
+        decoded = tf.keras.layers.Dense(self.encoding_dim[1], activation='relu')(encoded)
+        for ind in range(2, len(self.encoding_dim)):
+            decoded = tf.keras.layers.Dense(self.encoding_dim[ind], activation='relu')(decoded)
+
+        decoded = tf.keras.layers.Dense(self.input_shape[0]*self.input_shape[1]*self.input_shape[2], activation='relu')(decoded)
+        decoded = tf.keras.layers.Reshape(self.input_shape)(decoded)
 
         ae = tf.keras.models.Model(input_img, decoded)
 
-        encoder_input = tf.keras.layers.Input(shape=(self.encoding_dim[1], ))
+        encoder_input = tf.keras.layers.Input(shape=(32, ))
         decoder_layer = ae.layers[0]
         decoder = tf.keras.models.Model(encoder_input, decoder_layer(encoder_input))
 
-        ae.compile(optimizer='adadelta', loss='binary_crossentropy', metrics=['acc'])
+        ae.compile(optimizer=tf.keras.optimizers.Adam(lr=0.0001), loss='binary_crossentropy', metrics=[self.__rounded_accuracy])
 
         return ae, encoder
 
